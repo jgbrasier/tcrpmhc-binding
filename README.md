@@ -1,2 +1,3 @@
-# tcrpmhc-binding
-Predicting TCR-pMHC binding
+# TCR-pMHC Binding
+
+Jean-Guillaume Brasier (Harvard IACS) & Marinka Zitnik (HMS DBMI)
