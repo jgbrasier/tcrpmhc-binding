@@ -1,7 +1,12 @@
+import os 
+import sys
+
+sys.path.append(os.getcwd())
+
 import pandas as pd
 import numpy as np
 
-from utils import enc_list_bl_max_len, blosum50_20aa
+from src.utils import enc_list_bl_max_len, blosum50_20aa
 
 import torch
 from torch.utils.data import Dataset
@@ -11,6 +16,7 @@ class TCRSeqDataset(Dataset):
         super().__init__()
         self.file = file
         data = pd.read_csv(file)
+        self._len = len(data)
         self.encoding = encoding
         self.test = test
 
@@ -24,7 +30,7 @@ class TCRSeqDataset(Dataset):
         return self.test
 
     def __len__(self):
-        return len(self.data)
+        return self._len
 
     def __getitem__(self, index):
         if torch.is_tensor(index):

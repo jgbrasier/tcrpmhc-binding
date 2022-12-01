@@ -3,25 +3,24 @@ import os
 import pandas as pd
 import numpy as np
 
-from src.utils import enc_list_bl_max_len, blosum50_20aa
+from src.dataset import TCRSeqDataset
 
-train_file = "tcrpmhc-binding/data_test/sample_train.csv"
-test_file = "tcrpmhc-binding/data_test/sample_test.csv"
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.data import random_split
+train_file = "data_test/sample_train.csv"
+test_file = "data_test/sample_test.csv"
 
-print('Loading and encoding the data..')
-train_data = pd.read_csv(train_file)
-test_data = pd.read_csv(test_file)
+train_dataset = TCRSeqDataset(file = train_file)
+train_size = int(len(train_dataset)*0.8)
+val_size = len(train_dataset) - train_size
+train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-encoding = blosum50_20aa
+test_dataset = TCRSeqDataset(file = test_file, test=True)
 
-pep_train = enc_list_bl_max_len(train_data.peptide, encoding, 9)
-tcra_train = enc_list_bl_max_len(train_data.CDR3a, encoding, 30)
-tcrb_train = enc_list_bl_max_len(train_data.CDR3b, encoding, 30)
-y_train = np.array(train_data.binder)
+BATCH_SIZE = 16
 
-pep_test = enc_list_bl_max_len(test_data.peptide, encoding, 9)
-tcra_test = enc_list_bl_max_len(test_data.CDR3a, encoding, 30)
-tcrb_test = enc_list_bl_max_len(test_data.CDR3b, encoding, 30)
+train_dataloader = DataLoader(train_dataset, batch_size = BATCH_SIZE)
+val_dataloader = DataLoader(val_dataset, batch_size=len(val_dataset))
+test_dataloader = DataLoader(test_dataset, batch_size=len(test_dataset))
 
-train_inputs = [tcra_train, tcrb_train, pep_train]
-test_inputs = [tcra_test, tcrb_test, pep_test]

@@ -1,9 +1,3 @@
-####!/usr/bin/env python
-
-"""
-Functions for data IO for neural network training.
-"""
-
 from __future__ import print_function
 import argparse
 import sys
