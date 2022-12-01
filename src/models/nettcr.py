@@ -7,7 +7,6 @@ from torch.nn import Linear, Conv1d, AdaptiveMaxPool1d
 
 # import pytorch_lightning as pl
 
-
 class NetTCR(nn.Module):
     def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, device='cpu'):
         super().__init__()
@@ -16,7 +15,7 @@ class NetTCR(nn.Module):
         self.batch_size = batch_size
 
         self.layers = dict()
-        self.lin1 = Linear(in_features=240, out_features=32, device=device)
+        self.lin1 = Linear(in_features=16*5, out_features=32, device=device)
         self.lin2 = Linear(in_features=32, out_features=1, device=device)
         self.activation = F.sigmoid
         for e, l in self._elems.items():
@@ -27,7 +26,8 @@ class NetTCR(nn.Module):
         
 
 
-    def forward(self, x_peptide, x_cdra, x_cdrb):
+    def forward(self, x):
+        x_peptide, x_cdra, x_cdrb = x
         pep_out_1 = self.activation(self.layers['peptide']["conv_1"](x_peptide))
         pep_out_1 = self.layers['peptide']["pool_1"](pep_out_1)
         pep_out_3 = self.activation(self.layers['peptide']["conv_3"](x_peptide))
