@@ -47,10 +47,10 @@ class TCRSeqDataset(Dataset):
         tcrb = self.tcrb[index]
 
         if self.istest:
-            return (torch.tensor(peptide, device=self._device), torch.tensor(tcra, device=self._device), torch.tensor(tcrb, device=self._device))
+            return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float))
         else:
             y = self.y[index]
-            return (torch.tensor(peptide, device=self._device), torch.tensor(tcra, device=self._device), torch.tensor(tcrb, device=self._device)), torch.tensor(y, device=self._device)
+            return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float)), torch.tensor(y, device=self._device, dtype=torch.float)
 
 if __name__=="__main__":
 
