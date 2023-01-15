@@ -6,10 +6,14 @@ sys.path.append(os.getcwd())
 import pandas as pd
 import numpy as np
 
+from typing import Optional
+
 from src.utils import enc_list_bl_max_len, blosum50_20aa
 
 import torch
 from torch.utils.data import Dataset
+
+import pytorch_lightning as pl
 
 class TCRSeqDataset(Dataset):
     def __init__(self, file: str, test: bool =False, 
@@ -51,6 +55,23 @@ class TCRSeqDataset(Dataset):
         else:
             y = self.y[index]
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float)), torch.tensor(y, device=self._device, dtype=torch.float)
+
+class TCRSeqDataModule(pl.LightningDataModule):
+    def __init__(self, datadir: Optional[str]=None, testdir: Optional[str]=None, 
+                encoder= enc_list_bl_max_len, encoding: dict = blosum50_20aa, 
+                peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30, 
+                device: torch.device = torch.device('cpu'), num_workers=0) -> None:
+        super().__init__()
+
+        self.datadir = datadir
+        self.testdir = testdir
+
+
+        self._device = device
+
+    def setup(self, stage: Optional[str] = None, train_size=0.8) -> None:
+        pass
+
 
 if __name__=="__main__":
 

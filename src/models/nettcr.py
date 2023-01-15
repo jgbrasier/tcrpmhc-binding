@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Linear, Conv1d, AdaptiveMaxPool1d
 
+import pytorch_lightning as pl
+
 # import pytorch_lightning as pl
 
 class GlobalMaxPool1D(nn.Module):
@@ -15,6 +17,29 @@ class GlobalMaxPool1D(nn.Module):
 
     def forward(self, input):
         return torch.max(input, axis=self.step_axis).values
+
+class LightningNetTCR(pl.LightningModule):
+    def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, device='cpu'):
+        super().__init__()
+
+        self.batch_size = batch_size
+
+        self.n_kernels = 5
+        n_filters = 16
+        hidden_dim = 32
+
+        self.pep_conv = nn.ModuleList([Conv1d(in_channels=peptide_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
+        self.cdra_conv = nn.ModuleList([Conv1d(in_channels=cdra_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
+        self.cdrb_conv = nn.ModuleList([Conv1d(in_channels=cdrb_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
+
+        self.pool =GlobalMaxPool1D()
+        self.activation = nn.Sigmoid()
+
+        self.lin1 = Linear(in_features=3*self.n_kernels*n_filters, out_features=hidden_dim, device=device)
+        self.lin2 = Linear(in_features=hidden_dim, out_features=1, device=device)
+
+    
+
 
 class NetTCR(nn.Module):
     def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, device='cpu'):
