@@ -136,4 +136,4 @@ checkpoint
 .DS_Store
 
 # data
-data/net_tcr/*
+/data/net_tcr

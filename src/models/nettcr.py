@@ -7,6 +7,12 @@ from torch.nn import Linear, Conv1d
 
 import pytorch_lightning as pl
 
+from torchmetrics.classification.accuracy import BinaryAccuracy
+from torchmetrics.classification.auroc import BinaryAUROC
+from torchmetrics.classification.precision_recall import BinaryPrecision, BinaryRecall
+from torchmetrics.classification.f_beta import BinaryF1Score
+
+
 # import pytorch_lightning as pl
 
 class GlobalMaxPool1D(nn.Module):
@@ -37,6 +43,12 @@ class LightningNetTCR(pl.LightningModule):
 
         self.criterion = nn.BCELoss()
 
+        self.acc = BinaryAccuracy()
+        self.precision = BinaryPrecision()
+        self.recall = BinaryRecall()
+        self.f1 = BinaryF1Score()
+        self.auroc = BinaryAUROC()
+
     
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.01)
@@ -63,7 +75,8 @@ class LightningNetTCR(pl.LightningModule):
         y_hat = self(x)
         y = torch.unsqueeze(y, dim=1)
         loss = self.criterion(y_hat, y)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -71,7 +84,17 @@ class LightningNetTCR(pl.LightningModule):
         y_hat = self(x)
         y = torch.unsqueeze(y, dim=1)
         loss = self.criterion(y_hat, y)
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+        acc = self.acc(y_hat, y)
+        precision = self.precision(y_hat, y)
+        recall = self.recall(y_hat, y)
+        f1 = self.f1(y_hat, y)
+        auroc = self.auroc(y_hat, y)
+        self.log("accuracy", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -79,7 +102,17 @@ class LightningNetTCR(pl.LightningModule):
         y_hat = self(x)
         y = torch.unsqueeze(y, dim=1)
         loss = self.criterion(y_hat, y)
-        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+        acc = self.acc(y_hat, y)
+        precision = self.precision(y_hat, y)
+        recall = self.recall(y_hat, y)
+        f1 = self.f1(y_hat, y)
+        auroc = self.auroc(y_hat, y)
+        self.log("accuracy", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
 class NetTCR(nn.Module):
