@@ -132,6 +132,8 @@ dmypy.json
 logs
 checkpoint
 
-
 # Mac stuff
 .DS_Store
+
+# data
+data/net_tcr/*
