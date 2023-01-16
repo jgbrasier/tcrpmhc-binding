@@ -3,7 +3,7 @@ import torch
 
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear, Conv1d, AdaptiveMaxPool1d
+from torch.nn import Linear, Conv1d
 
 import pytorch_lightning as pl
 
@@ -19,26 +19,70 @@ class GlobalMaxPool1D(nn.Module):
         return torch.max(input, axis=self.step_axis).values
 
 class LightningNetTCR(pl.LightningModule):
-    def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, device='cpu'):
+    def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, 
+                n_kernels: int = 5, n_filters: int = 16, hidden_dim: int = 32, device='cpu'):
         super().__init__()
 
-        self.batch_size = batch_size
-
-        self.n_kernels = 5
-        n_filters = 16
-        hidden_dim = 32
-
-        self.pep_conv = nn.ModuleList([Conv1d(in_channels=peptide_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
-        self.cdra_conv = nn.ModuleList([Conv1d(in_channels=cdra_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
-        self.cdrb_conv = nn.ModuleList([Conv1d(in_channels=cdrb_len, out_channels=n_filters, kernel_size=2*i+1, padding='same', device=device) for i in range(self.n_kernels)])
+        self.save_hyperparameters()
+        
+        self.pep_conv = nn.ModuleList([Conv1d(in_channels=self.hparams.peptide_len, out_channels=self.hparams.n_filters, kernel_size=2*i+1, padding='same', device=self.hparams.device) for i in range(self.hparams.n_kernels)])
+        self.cdra_conv = nn.ModuleList([Conv1d(in_channels=self.hparams.cdra_len, out_channels=self.hparams.n_filters, kernel_size=2*i+1, padding='same', device=self.hparams.device) for i in range(self.hparams.n_kernels)])
+        self.cdrb_conv = nn.ModuleList([Conv1d(in_channels=self.hparams.cdrb_len, out_channels=self.hparams.n_filters, kernel_size=2*i+1, padding='same', device=self.hparams.device) for i in range(self.hparams.n_kernels)])
 
         self.pool =GlobalMaxPool1D()
         self.activation = nn.Sigmoid()
 
-        self.lin1 = Linear(in_features=3*self.n_kernels*n_filters, out_features=hidden_dim, device=device)
-        self.lin2 = Linear(in_features=hidden_dim, out_features=1, device=device)
+        self.lin1 = Linear(in_features=3*self.hparams.n_kernels*n_filters, out_features=self.hparams.hidden_dim, device=self.hparams.device)
+        self.lin2 = Linear(in_features=self.hparams.hidden_dim, out_features=1, device=self.hparams.device)
+
+        self.criterion = nn.BCELoss()
 
     
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.01)
+
+    def forward(self, x):
+        x_peptide, x_cdra, x_cdrb = x
+
+        pep_out_list = [self.pool(self.activation(self.pep_conv[n](x_peptide))) for n in range(self.hparams.n_kernels)]
+        cdra_out_list = [self.pool(self.activation(self.cdra_conv[n](x_cdra))) for n in range(self.hparams.n_kernels)]
+        cdrb_out_list = [self.pool(self.activation(self.cdrb_conv[n](x_cdrb))) for n in range(self.hparams.n_kernels)]
+
+        pep_out = torch.cat(pep_out_list, dim=1)
+        cdra_out = torch.cat(cdra_out_list, dim=1)
+        cdrb_out = torch.cat(cdrb_out_list, dim=1)
+
+        out = torch.cat([pep_out, cdra_out, cdrb_out], dim=1)
+
+        out = self.activation(self.lin1(out))
+        out = self.activation(self.lin2(out))
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        y = torch.unsqueeze(y, dim=1)
+        loss = self.criterion(y_hat, y)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        y = torch.unsqueeze(y, dim=1)
+        loss = self.criterion(y_hat, y)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        y = torch.unsqueeze(y, dim=1)
+        loss = self.criterion(y_hat, y)
+        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
+        return loss
+    
+    
+
 
 
 class NetTCR(nn.Module):
@@ -61,7 +105,6 @@ class NetTCR(nn.Module):
 
         self.lin1 = Linear(in_features=3*self.n_kernels*n_filters, out_features=hidden_dim, device=device)
         self.lin2 = Linear(in_features=hidden_dim, out_features=1, device=device)
-
         
     def forward(self, x):
         x_peptide, x_cdra, x_cdrb = x

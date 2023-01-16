@@ -13,7 +13,6 @@ from src.utils import enc_list_bl_max_len, blosum50_20aa, blosum50_full, hard_sp
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-
 import pytorch_lightning as pl
 
 class TCRSeqDataset(Dataset):
