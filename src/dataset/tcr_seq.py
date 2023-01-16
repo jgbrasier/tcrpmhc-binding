@@ -11,7 +11,7 @@ from typing import Optional
 from src.utils import enc_list_bl_max_len, blosum50_20aa, blosum50_full, hard_split_df
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 import pytorch_lightning as pl
 
@@ -84,16 +84,50 @@ class TCRSeqDataModule(pl.LightningDataModule):
         self._num_workers = num_workers
         self._device = device
 
-    def setup(self, train_size=0.8, sep='\t', target='epitope', low=50, high=800, random_seed=42) -> None:
+    def setup(self, train_size=0.85, sep='\t', encoder= enc_list_bl_max_len, encoding: dict = blosum50_20aa, 
+                peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30,
+                target='epitope', low=50, high=800, random_seed=42) -> None:
         
         if not self._test:
             self.data = pd.read_csv(self.train_path, sep=sep)
 
-            self.train, self.test, selected_targets = hard_split_df(self.data, target_col=target, min_ratio=train_size,
+            train_df, test_df, selected_targets = hard_split_df(self.data, target_col=target, min_ratio=train_size,
                                                                     low=low, high=high, random_seed=random_seed)
 
+            # random split train/val
+
+            self.train = TCRSeqDataset(train_df, encoder=encoder, encoding=encoding, device = self._device,
+                                peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
+
+            # self.val = TCRSeqDataset(val_df, encoder=encoder, encoding=encoding, device = self._device,
+            #                     peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)                  
+
+            self.test = TCRSeqDataset(test_df, encoder=encoder, encoding=encoding, device = self._device,
+                                peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
+
         else:
-            self.test = pd.read_csv(self.test_path, sep=sep)
+            test_df = pd.read_csv(self.test_path, sep=sep)
+
+            self.test = TCRSeqDataset(test_df, encoder=encoder, encoding=encoding, device = self._device,
+                                peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
+
+    def train_dataloader(self, batch_size=32):
+        self.train_batch_size = batch_size
+        return DataLoader(self.train, batch_size=self.train_batch_size, num_workers=self._num_workers)  # type: ignore
+
+    def val_dataloader(self, batch_size=None):
+        if batch_size is None:
+            self.val_batch_size = len(self.val)  # type: ignore
+        else:
+            self.val_batch_size = batch_size
+        return DataLoader(self.val, batch_size=self.val_batch_size, num_workers=self._num_workers)  # type: ignore
+    
+    def test_dataloader(self, batch_size=None):
+        if batch_size is None:
+            self.test_batch_size = len(self.test)  # type: ignore
+        else:
+            self.test_batch_size = batch_size
+        return DataLoader(self.test, batch_size=self.test_batch_size, num_workers=self._num_workers)  # type: ignore
         
 
 
