@@ -80,10 +80,6 @@ class LightningNetTCR(pl.LightningModule):
         loss = self.criterion(y_hat, y)
         self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, batch_size=len(batch))
         return loss
-    
-    
-
-
 
 class NetTCR(nn.Module):
     def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, device='cpu'):
