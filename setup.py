@@ -11,7 +11,8 @@ setup(
    license="MIT",
    author='Jean-Guillaume Brasier',
    author_email='jbrasier@g.harvard.edu',
-   packages=find_packages(include=['src', 'src.*']),  #same as name
+   packages=find_packages(include=['src']),#same as name
+   package_dir={'src': 'src/'}
 #    install_requires=[
 #                     'numpy',
 #                     'matplotlib',
