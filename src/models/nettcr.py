@@ -56,6 +56,7 @@ class LightningNetTCR(pl.LightningModule):
 
         out = self.activation(self.lin1(out))
         out = self.activation(self.lin2(out))
+        return out
 
     def training_step(self, batch, batch_idx):
         x, y = batch

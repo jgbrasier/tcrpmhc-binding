@@ -1,8 +1,6 @@
 import os 
 import sys
 
-sys.path.append(os.getcwd())
-
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
@@ -43,7 +41,7 @@ class TCRSeqDataset(Dataset):
 
     @property
     def istest(self):
-        return self.test
+        return self._test
 
     def __len__(self):
         return self._len
@@ -56,27 +54,30 @@ class TCRSeqDataset(Dataset):
         tcra = self.cdr3a[index]
         tcrb = self.cdr3b[index]
 
-        if self.istest:
+        if self._test:
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float))
         else:
             y = self.y[index]
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float)), torch.tensor(y, device=self._device, dtype=torch.float)
 
 class TCRSeqDataModule(pl.LightningDataModule):
-    def __init__(self, path_to_file: str, test: Optional[bool]=None, batch_size: int = 32, n_splits: int = 5,
+    def __init__(self, path_to_file: str, path_to_test_file: Optional[str]=None, 
+                batch_size: int = 32, n_splits: int = 5, k: int = 1,
                 peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30,
-                target='epitope', low: int =50, high: int =800, random_seed: int =42,
+                target='epitope', low: int = 50, high: int = 800, random_seed: int =42,
                 device: torch.device = torch.device('cpu'), num_workers: int =0) -> None:
         """_summary_
 
         :param path_to_file: relative path to .csv or .tsv file
         :type path_to_file: str
-        :param test: flag to put dataloader in test-only mode, defaults to None
-        :type test: Optional[bool], optional
+        :param path_to_test_file: if dataset has already been split, provide path to test file, defaults to None
+        :type test: Optional[str], optional
         :param batch_size: batch size, defaults to 32
         :type batch_size: int, optional
         :param n_splits: train/val stratified k fold number of splits, defaults to 5
         :type n_splits: int, optional
+        :param k: k-th fold number, defaults to 1
+        :type k: int, optional
         :param peptide_len: _description_, defaults to 9
         :type peptide_len: int, optional
         :param cdra_len: encoding dimension of cdr3b sequence, defaults to 30
@@ -99,52 +100,62 @@ class TCRSeqDataModule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
 
-        if not test:
+        if path_to_test_file:
+            self.train_path = path_to_file
+            self.test_path = path_to_test_file
+            self._test_provided = True
+        else:
             self.train_path = path_to_file
             self.test_path = None
-        else:
-            self.train_path = None
-            self.test_path = path_to_file
+            self._test_provided = False
 
-        self.data = pd.DataFrame()
-
-        self.train = None
-        self.val = None
-        self.test = None
+        self.train: Optional[TCRSeqDataset] = None
+        self.val: Optional[TCRSeqDataset] = None
+        self.test: Optional[TCRSeqDataset] = None
 
         self.selected_targets = None
 
-    def setup(self, train_size=0.85, sep='\t', encoder= enc_list_bl_max_len, encoding: dict = blosum50_full) -> None:
-        
-        if not self._test:
-            self.data = pd.read_csv(self.train_path, sep=sep)
+    def setup(self, sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding: dict = blosum50_full) -> None:
+        """_summary_
 
-            train_df, test_df, self.selected_targets = hard_split_df(self.data, target_col=self.hparams.target, min_ratio=train_size,
-                                                                    low=self.hparams.low, high=self.hparams.high, random_seed=self.hparams.random_seed)
+        :param train_size: train/test split, must be between 0 and 1
+                        If test_path is specified, you can ignore this, defaults to 0.85
+        :type train_size: float, optional
+        :param sep: seperator string for pd.read_csv, defaults to '\t'
+        :type sep: str, optional
+        :param encoder: encoding function, defaults to enc_list_bl_max_len
+        :type encoder: Callable, optional
+        :param encoding: encoding dictionary, defaults to blosum50_full
+        :type encoding: dict, optional
+        """
+        # load in training dataframe
+        train_df = pd.read_csv(self.train_path, sep=sep)
 
-            # stratified kfold split train/val
-            skf = StratifiedKFold(n_splits=self.hparams.num_splits, shuffle=True, random_state=self.hparams.random_seed)
-            all_splits = [k for k in skf.split(train_df)]
-            train_indexes, val_indexes = all_splits[self.hparams.k]
-            train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
-
-            train_df, val_df = train_df[train_indexes], train_df[val_indexes]
-
-            # encoding will be done at dataset initalization
-            self.train = TCRSeqDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
-
-            self.val = TCRSeqDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)                  
-
-            self.test = TCRSeqDataset(test_df, encoder=encoder, encoding=encoding, device = self._device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
-
-        else:
+        if self._test_provided:
+            # if test file is provided, load it in directly
             test_df = pd.read_csv(self.test_path, sep=sep)
+        else:
+            # if no test file, we use the HardSplit heuristic
+            train_df, test_df, self.selected_targets = hard_split_df(train_df, target_col=self.hparams.target, min_ratio=train_size,
+                                                                    low=self.hparams.low, high=self.hparams.high, random_seed=self.hparams.random_seed)
+        
+        # stratified kfold split train/val
+        skf = StratifiedKFold(n_splits=self.hparams.n_splits, shuffle=True, random_state=self.hparams.random_seed)
+        all_splits = [k for k in skf.split(train_df, train_df['epitope'])]
+        train_indexes, val_indexes = all_splits[self.hparams.k]
+        train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
 
-            self.test = TCRSeqDataset(test_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+        train_df, val_df = train_df.iloc[train_indexes], train_df.iloc[val_indexes]
+
+        # encoding will be done at dataset initalization
+        self.train = TCRSeqDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+
+        self.val = TCRSeqDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)                  
+
+        self.test = TCRSeqDataset(test_df, test=True, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)  # type: ignore
@@ -158,7 +169,7 @@ class TCRSeqDataModule(pl.LightningDataModule):
 
 
 if __name__=="__main__":
-
+    sys.path.append(os.getcwd())
     # for testing purposes
     train_file = "data/sample_train.csv"
 

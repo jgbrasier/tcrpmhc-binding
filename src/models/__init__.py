@@ -1,1 +1,1 @@
-from .nettcr import NetTCR
+from .nettcr import NetTCR, LightningNetTCR
