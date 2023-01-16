@@ -2,11 +2,9 @@ from __future__ import print_function
 import argparse
 import sys
 import os
-import time
-import matplotlib.pyplot as plt
-from operator import add
 import math
 import numpy as np
+import pandas as pd
 
 def mkdir(outdir):
     if not os.path.exists(outdir):
@@ -51,6 +49,15 @@ def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len):
 
     return enc_aa_seq
 
+    
+## Loading blosum from file
+def load_blosum50_full():
+    blosum50 = pd.read_csv('data/encoding/blosum50.matrix').to_dict('list')
+    for k, v in blosum50.items():
+        blosum50[k] = np.array(v)
+    return blosum50
+
+blosum50_full = load_blosum50_full()
 
 blosum50_20aa = {
         'A': np.array((5,-2,-1,-2,-1,-1,-1,0,-2,-1,-2,-1,-1,-3,-1,1,0,-3,-2,0)),
@@ -72,6 +79,54 @@ blosum50_20aa = {
         'T': np.array((0,-1,0,-1,-1,-1,-1,-2,-2,-1,-1,-1,-1,-2,-1,2,5,-3,-2,0)),
         'W': np.array((-3,-3,-4,-5,-5,-1,-3,-3,-3,-3,-2,-3,-1,1,-4,-4,-3,15,2,-3)),
         'Y': np.array((-2,-1,-2,-3,-3,-1,-2,-3,2,-1,-1,-2,0,4,-3,-2,-2,2,8,-1)),
-        'V': np.array((0,-3,-3,-4,-1,-3,-3,-4,-4,4,1,-3,1,-1,-3,-2,0,-3,-1,5))
+        'V': np.array((0,-3,-3,-4,-1,-3,-3,-4,-4,4,1,-3,1,-1,-3,-2,0,-3,-1,5)),
     }
+
+from typing import Tuple, List
+
+def hard_split_df(
+        df: pd.DataFrame, target_col: str, min_ratio: float, random_seed: float, low: int, high: int) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
+    """ Assume a target column, e.g. `epitope`.
+    Then:
+        1) Select random sample
+        2) All samples sharing the same value of that column
+        with the randomly selected sample are used for test
+        3)Repeat until test budget (defined by train/test ratio) is
+        filled.
+    """
+    min_test_len = round((1-min_ratio) * len(df))
+    test_len = 0
+    selected_target_val = []
+
+    train_df = df.copy()
+    test_df = pd.DataFrame()
+    
+    target_count_df = df.groupby([target_col]).size().reset_index(name='counts')
+    target_count_df = target_count_df[target_count_df['counts'].between(low, high, inclusive='both')]
+    possible_target_val = list(target_count_df[target_col].unique())
+    max_target_len = len(possible_target_val)
+
+    while test_len < min_test_len:
+#         sample = train_df.sample(n=1, random_state=random_state)
+#         target_val = sample[target_col].values[0]
+        rng = np.random.default_rng(seed=random_seed)
+        target_val = rng.choice(possible_target_val)
+
+        if target_val not in selected_target_val:
+            to_test = train_df[train_df[target_col] == target_val]
+
+            train_df = train_df.drop(to_test.index)
+            test_df = pd.concat((test_df, to_test), axis=0)
+            test_len = len(test_df)
+
+            selected_target_val.append(target_val)
+            possible_target_val.remove(target_val)
+
+        if len(selected_target_val) == max_target_len:
+            print(f"Possible targets left {possible_target_val}")
+            raise Exception('No more values to sample from.')
+
+    print(f"Target {target_col} sequences: {selected_target_val}")
+
+    return train_df, test_df, selected_target_val
 

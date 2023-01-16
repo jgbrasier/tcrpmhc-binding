@@ -8,7 +8,7 @@ import numpy as np
 
 from typing import Optional
 
-from src.utils import enc_list_bl_max_len, blosum50_20aa
+from src.utils import enc_list_bl_max_len, blosum50_20aa, blosum50_full, hard_split_df
 
 import torch
 from torch.utils.data import Dataset
@@ -16,22 +16,28 @@ from torch.utils.data import Dataset
 import pytorch_lightning as pl
 
 class TCRSeqDataset(Dataset):
-    def __init__(self, file: str, test: bool =False, 
+    """
+    DataLoader for:
+    Montemurro, A., Schuster, V., Povlsen, H.R. et al. 
+    NetTCR-2.0 enables accurate prediction of TCR-peptide binding 
+    by using paired TCRα and β sequence data. 
+    Commun Biol 4, 1060 (2021). https://doi.org/10.1038/s42003-021-02610-3
+    """
+    def __init__(self, data: pd.DataFrame, test: Optional[bool]=False, 
                 encoder= enc_list_bl_max_len, encoding: dict = blosum50_20aa, 
                 peptide_len: int = 9, cdra_len: int = 30,cdrb_len: int = 30, 
                 device: torch.device = torch.device('cpu')) -> None:
 
         super().__init__()
-        self.file = file
-        data = pd.read_csv(file)
-        self._len = len(data)
+        self.data = data
         self.encoding = encoding
-        self.test = test
+        self._len = len(data.index)
+        self._test = test
 
-        self.peptide = encoder(data.peptide, encoding, peptide_len)
-        self.tcra = encoder(data.CDR3a, encoding, cdra_len)
-        self.tcrb = encoder(data.CDR3b, encoding, cdrb_len)
-        self.y = np.array(data.binder) if not test else None
+        self.peptide = encoder(data['epitope'], encoding, peptide_len)
+        self.cdr3a = encoder(data['cdr3a'], encoding, cdra_len)
+        self.cdr3b = encoder(data['cdr3b'], encoding, cdrb_len)
+        self.y = np.array(data['binder']) if not test else None
 
         self._device = device
 
@@ -47,8 +53,8 @@ class TCRSeqDataset(Dataset):
             index = index.tolist()
 
         peptide = self.peptide[index]
-        tcra = self.tcra[index]
-        tcrb = self.tcrb[index]
+        tcra = self.cdr3a[index]
+        tcrb = self.cdr3b[index]
 
         if self.istest:
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float))
@@ -57,20 +63,38 @@ class TCRSeqDataset(Dataset):
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float)), torch.tensor(y, device=self._device, dtype=torch.float)
 
 class TCRSeqDataModule(pl.LightningDataModule):
-    def __init__(self, datadir: Optional[str]=None, testdir: Optional[str]=None, 
-                encoder= enc_list_bl_max_len, encoding: dict = blosum50_20aa, 
-                peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30, 
+    def __init__(self, path_to_file, test: Optional[bool]=None, 
                 device: torch.device = torch.device('cpu'), num_workers=0) -> None:
         super().__init__()
 
-        self.datadir = datadir
-        self.testdir = testdir
+        if not test:
+            self.train_path = path_to_file
+            self.test_path = None
+        else:
+            self.train_path = None
+            self.test_path = path_to_file
+        self._test = test
 
+        self.data = pd.DataFrame()
 
+        self.train = None
+        self.val = None
+        self.test = None
+
+        self._num_workers = num_workers
         self._device = device
 
-    def setup(self, stage: Optional[str] = None, train_size=0.8) -> None:
-        pass
+    def setup(self, train_size=0.8, sep='\t', target='epitope', low=50, high=800, random_seed=42) -> None:
+        
+        if not self._test:
+            self.data = pd.read_csv(self.train_path, sep=sep)
+
+            self.train, self.test, selected_targets = hard_split_df(self.data, target_col=target, min_ratio=train_size,
+                                                                    low=low, high=high, random_seed=random_seed)
+
+        else:
+            self.test = pd.read_csv(self.test_path, sep=sep)
+        
 
 
 if __name__=="__main__":
