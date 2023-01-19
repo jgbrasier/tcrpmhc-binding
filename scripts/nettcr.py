@@ -27,3 +27,4 @@ trainer = pl.Trainer(max_epochs=20, logger=tb_logger, callbacks=[checkpoint_call
 
 trainer.fit(nettcr, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
+
