@@ -3,7 +3,11 @@ from typing import Optional
 
 import re
 import pandas as pd
+import networkx as nx
 from biopandas.pdb import PandasPdb
+
+import torch
+from torch_geometric.data import Data
 
 from prody import parsePDBHeader
 from graphein.protein.graphs import process_dataframe, deprotonate_structure, convert_structure_to_centroids, subset_structure_to_atom_type, filter_hetatms, remove_insertions
@@ -94,7 +98,7 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict):
     return tcr_df, pmhc_df
 
 
-def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =6.):
+def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =10.):
 
     atom_processing_funcs = [deprotonate_structure, remove_insertions, convert_structure_to_centroids]
     
@@ -108,3 +112,35 @@ def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold
     g = compute_edges(g, get_contacts_config=None, funcs=[partial(add_distance_threshold, long_interaction_threshold=5, threshold=egde_dist_threshold)])
 
     return g
+
+def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
+    # Initialise dict used to construct Data object
+    # data = {k: v for k, v in sequence_data.items()}
+    data = {"node_id": list(G.nodes())}
+    
+    G = nx.convert_node_labels_to_integers(G)
+
+    # Construct Edge Index
+    edge_index = torch.LongTensor(list(G.edges)).t().contiguous()
+
+    # Add node features
+    for i, (_, feat_dict) in enumerate(G.nodes(data=True)):
+        for key, value in feat_dict.items():
+            data[str(key)] = [value] if i == 0 else data[str(key)] + [value]
+
+    # Add edge features
+    for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
+        for key, value in feat_dict.items():
+            data[str(key)] = (
+                list(value) if i == 0 else data[str(key)] + list(value)
+            )
+
+    # Add graph-level features
+    for feat_name in G.graph:
+        data[str(feat_name)] = [G.graph[feat_name]]
+
+    data["edge_index"] = edge_index.view(2, -1)
+    data = Data.from_dict(data)
+    data.num_nodes = G.number_of_nodes()
+
+    return data
