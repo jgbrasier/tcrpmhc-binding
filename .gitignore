@@ -137,4 +137,5 @@ checkpoint
 
 # data
 notebooks
-data/structures
+data/pdb
+data/graphs
