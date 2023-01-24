@@ -17,8 +17,8 @@ from graphein.protein import plotly_protein_structure_graph
 
 def find_chain_names(header: dict):
     flag_dict = {
-    'tra': {'base': ['tcr', 't-cell', 't cell'], 'variant': ['alpha', 'valpha', 'light']},
-    'trb': {'base': ['tcr', 't-cell', 't cell'], 'variant': ['beta', 'vbeta', 'heavy']},
+    'tra': {'base': ['tcr', 't-cell', 't cell', 't'], 'variant': ['alpha', 'valpha', 'light']},
+    'trb': {'base': ['tcr', 't-cell', 't cell', 't'], 'variant': ['beta', 'vbeta', 'heavy']},
     'b2m': ['beta-2-microglobulin', 'beta 2 microglobulin', 'b2m'],
     'epitope': ['peptide', 'epitope', 'protein', 'self-peptide', 'nuclear'],
     'mhc': ['mhc', 'hla', 'hla class i', 'mhc class i']
@@ -37,6 +37,10 @@ def find_chain_names(header: dict):
             else:
                 if bool(set(name) & set(flag_dict[key])):
                     chain_key_dict[key].append(chain)
+
+    for k, v in chain_key_dict.items():
+        if len(v)==0:
+            raise ValueError('Header parsing error for key: {} in protein {}'.format(k, header['identifier']))
     return chain_key_dict
 
 def read_pdb_to_dataframe(
@@ -132,7 +136,7 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
     for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
         for key, value in feat_dict.items():
             data[str(key)] = (
-                list(value) if i == 0 else data[str(key)] + list(value)
+                [value] if i == 0 else data[str(key)] + [value]
             )
 
     # Add graph-level features
@@ -144,3 +148,29 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
     data.num_nodes = G.number_of_nodes()
 
     return data
+
+if __name__=='__main__':
+    import os
+    datadir = 'data/pdb/iedb_3d_resolved'
+    pdb_code = '1QRN'
+    pdb_path = os.path.join(datadir, pdb_code+'.pdb')
+
+    data = pd.read_csv('data/preprocessed/iedb_3d_binding_test.tsv', sep='\t')
+    epitope = data[data['id'] == pdb_code]['epitope'].str.lower().values
+    raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path)
+
+    print(header['chain_key_dict'])
+    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
+
+    tcr_g = build_residue_graph(tcr_raw_df, pdb_code)
+    pmhc_g = build_residue_graph(pmhc_raw_df, pdb_code)
+
+    p = plotly_protein_structure_graph(
+        tcr_g,
+        colour_edges_by="kind",
+        colour_nodes_by="seq_position",
+        label_node_ids=False,
+        plot_title="{} TCR alpha/beta chain Residue Graph".format(pdb_code),
+        node_size_multiplier=1
+        )
+    p.show()
