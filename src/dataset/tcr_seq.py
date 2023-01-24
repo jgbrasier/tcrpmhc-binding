@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
-class TCRSeqDataset(Dataset):
+class NetTCRDataset(Dataset):
     """
     DataLoader for:
     Montemurro, A., Schuster, V., Povlsen, H.R. et al. 
@@ -60,7 +60,7 @@ class TCRSeqDataset(Dataset):
             y = self.y[index]
             return (torch.tensor(peptide, device=self._device, dtype=torch.float), torch.tensor(tcra, device=self._device, dtype=torch.float), torch.tensor(tcrb, device=self._device, dtype=torch.float)), torch.tensor(y, device=self._device, dtype=torch.float)
 
-class TCRSeqDataModule(pl.LightningDataModule):
+class NetTCRDataModule(pl.LightningDataModule):
     def __init__(self, path_to_file: str, path_to_test_file: Optional[str]=None, 
                 batch_size: int = 32, n_splits: int = 5, k: int = 1,
                 peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30,
@@ -109,9 +109,9 @@ class TCRSeqDataModule(pl.LightningDataModule):
             self.test_path = None
             self._test_provided = False
 
-        self.train: Optional[TCRSeqDataset] = None
-        self.val: Optional[TCRSeqDataset] = None
-        self.test: Optional[TCRSeqDataset] = None
+        self.train: Optional[NetTCRDataset] = None
+        self.val: Optional[NetTCRDataset] = None
+        self.test: Optional[NetTCRDataset] = None
 
         self.selected_targets = None
 
@@ -136,9 +136,9 @@ class TCRSeqDataModule(pl.LightningDataModule):
             # if test file is provided, load it in directly
             test_df = pd.read_csv(self.test_path, sep=sep)
             # encoding will be done at dataset initalization
-            self.train = TCRSeqDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+            self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
                             peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
-            self.test = TCRSeqDataset(test_df, test=True, encoder=encoder, encoding=encoding, device = self.hparams.device,
+            self.test = NetTCRDataset(test_df, test=True, encoder=encoder, encoding=encoding, device = self.hparams.device,
                             peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
         else:
             if split == 'hard':
@@ -154,10 +154,10 @@ class TCRSeqDataModule(pl.LightningDataModule):
                 train_df, val_df = train_df.iloc[train_indexes], train_df.iloc[val_indexes]
 
             # encoding will be done at dataset initalization
-            self.train = TCRSeqDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+            self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
                                 peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
 
-            self.val = TCRSeqDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+            self.val = NetTCRDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
                                 peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)                  
 
 
@@ -179,7 +179,7 @@ if __name__=="__main__":
 
     peptide_len, cdra_len, cdrb_len = 9, 30, 30
 
-    train_dataset = TCRSeqDataset(file = train_file, peptide_len=peptide_len, cdra_len=cdra_len, cdrb_len=cdrb_len)
+    train_dataset = NetTCRDataset(file = train_file, peptide_len=peptide_len, cdra_len=cdra_len, cdrb_len=cdrb_len)
 
     for batch in train_dataset:
         print(batch)

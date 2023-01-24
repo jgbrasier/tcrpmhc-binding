@@ -1,2 +1,2 @@
-from .tcr_seq import TCRSeqDataset, TCRSeqDataModule
-from .tcr_geo import TCRpMHCGraphDataset
+from .tcr_seq import NetTCRDataset, NetTCRDataModule
+from .tcr_bind import TCRpMHCGraphDataset
