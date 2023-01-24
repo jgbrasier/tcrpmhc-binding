@@ -7,7 +7,6 @@ import pandas as pd
 from biopandas.pdb import PandasPdb
 
 import networkx as nx
-from tqdm import tqdm
 
 import torch
 from torch_geometric.data import Data, Dataset
@@ -155,51 +154,36 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
 
     return data
 
+def process_bound_pdb(pdb_path: str, pdb_id: str, node_embedding_function: Callable, egde_dist_threshold: int = 10.):
+    """ 
+    reads bound TCR-pMHC files in a directory, splits them into 
+    TCR and pMHC residue level graphs with node level embedings
 
-class TCRpMHCGraphDataset(Dataset):
-    def __init__(self, pdb_dir: str, tsv_path: str): 
-        
-        self.pdb_dir = pdb_dir
-        self.tsv_path = tsv_path
+    :param pdb_path: path/to/pdb_file
+    :type pdb_path: str
+    :param pdb_id: pdb id (or uuid) for storage redundancy
+    :type pdb_id: str
+    :param node_embedding_function: function to assign residue embeddings. 
+        Input a nx.Graph and outputs a nx.Graph, defaults to None
+    :type node_embedding_function: Callable
+    :param egde_dist_threshold: inter-residue distance to build graph edges, defaults to 10.
+    :type egde_dist_threshold: int, optional
+    :return: TCR and pMHC residue level graphs
+    :rtype: tuple(PyTorch Geometric graphs)
+    """
+    raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path)
+    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
+    
+    # TCR graph
+    tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
+    tcr_g = node_embedding_function(tcr_g)
+    # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
+    tcr_pt = convert_nx_to_pyg_data(tcr_g)
 
-        # load data
-        self.data = pd.read_csv(tsv_path, sep='\t')
-        self.data['path'] = [os.path.join(self.pdb_dir, str(id)+'.pdb') for id in self.data['id']]
+    # pMHC graph
+    pmhc_g = build_residue_graph(pmhc_raw_df, pdb_id,  egde_dist_threshold=egde_dist_threshold)
+    pmhc_g = node_embedding_function(pmhc_g)
+    # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
+    pmh_pt = convert_nx_to_pyg_data(pmhc_g)
 
-        self.node_embedding_func: Callable = None
-
-    def process_pdb(self, out_path: Optional[str] = None, node_embedding_function: Callable = None, ignore: List[str] = list()):
-        
-        self.node_embedding_func = node_embedding_function
-
-        for i in tqdm(range(len(self.data.index))):
-            seq_data = self.data.iloc[i]
-            # ignore problematic files 
-            if seq_data['id'] in ignore:
-                continue
-
-            # make dir
-            save_dir = os.path.join(out_path, seq_data['id'])
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            if len(os.listdir(save_dir)) == 0:
-                raw_df, header = read_pdb_to_dataframe(pdb_path=seq_data['path'])
-                tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
-                
-                # TCR graph
-                tcr_g = build_residue_graph(tcr_raw_df, seq_data['id'], egde_dist_threshold=10.)
-                tcr_g = node_embedding_function(tcr_g)
-                # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
-                tcr_pt = convert_nx_to_pyg_data(tcr_g)
-
-                # pMHC graph
-                pmhc_g = build_residue_graph(pmhc_raw_df, seq_data['id'],  egde_dist_threshold=10.)
-                pmhc_g = node_embedding_function(pmhc_g)
-                # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
-                pmh_pt = convert_nx_to_pyg_data(pmhc_g)
-
-                # save graphs
-                torch.save(tcr_pt, os.path.join(save_dir, f"{seq_data['id']}_tcr.pt"))
-                torch.save(tcr_pt, os.path.join(save_dir, f"{seq_data['id']}_pmhc.pt"))
-            else:
-                continue
+    return tcr_pt, pmh_pt
