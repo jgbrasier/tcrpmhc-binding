@@ -3,6 +3,8 @@ import string
 import re
 import os
 
+from tqdm import tqdm
+
 import pandas as pd
 from biopandas.pdb import PandasPdb
 
@@ -18,6 +20,10 @@ from graphein.protein.graphs import process_dataframe, deprotonate_structure, co
 from graphein.protein.graphs import initialise_graph_with_metadata, add_nodes_to_graph, compute_edges
 from graphein.protein.edges import add_peptide_bonds, add_hydrogen_bond_interactions, add_distance_threshold
 from graphein.protein import plotly_protein_structure_graph
+from graphein.protein.features.sequence.utils import (
+    compute_feature_over_chains,
+    subset_by_node_feature_value,
+)
 
 
 def find_chain_names(header: dict):
@@ -122,6 +128,32 @@ def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold
 
     return g
 
+def compute_residue_embedding(
+    G: nx.Graph,
+    embedding_function: Callable = None
+    ) -> nx.Graph:
+    """
+    Computes residue embeddings from a protein sequence and adds the to the graph.
+
+    :param G: ``nx.Graph`` to add esm embedding to.
+    :type G: nx.Graph
+    :param embedding_function: function to compute residue embedding from protein sequence
+    :type embedding_function: Callable
+    :return: ``nx.Graph`` with esm embedding feature added to nodes.
+    :rtype: nx.Graph
+    """
+
+    for chain in G.graph["chain_ids"]:
+        embedding = embedding_function(G.graph[f"sequence_{chain}"])
+        # remove start and end tokens from per-token residue embeddings
+        embedding = embedding[0, 1:-1]
+        subgraph = subset_by_node_feature_value(G, "chain_id", chain)
+
+        for i, (n, d) in enumerate(subgraph.nodes(data=True)):
+            G.nodes[n]["embedding"] = embedding[i]
+
+    return G
+
 def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
     # Initialise dict used to construct Data object
     # data = {k: v for k, v in sequence_data.items()}
@@ -154,7 +186,7 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
 
     return data
 
-def process_bound_pdb(pdb_path: str, pdb_id: str, node_embedding_function: Callable, egde_dist_threshold: int = 10.):
+def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, egde_dist_threshold: int = 10.):
     """ 
     reads bound TCR-pMHC files in a directory, splits them into 
     TCR and pMHC residue level graphs with node level embedings
@@ -163,9 +195,8 @@ def process_bound_pdb(pdb_path: str, pdb_id: str, node_embedding_function: Calla
     :type pdb_path: str
     :param pdb_id: pdb id (or uuid) for storage redundancy
     :type pdb_id: str
-    :param node_embedding_function: function to assign residue embeddings. 
-        Input a nx.Graph and outputs a nx.Graph, defaults to None
-    :type node_embedding_function: Callable
+    :param embedding_function: function to compute residue embedding from protein sequence
+    :type embedding_function: Callable
     :param egde_dist_threshold: inter-residue distance to build graph edges, defaults to 10.
     :type egde_dist_threshold: int, optional
     :return: TCR and pMHC residue level graphs
@@ -176,14 +207,72 @@ def process_bound_pdb(pdb_path: str, pdb_id: str, node_embedding_function: Calla
     
     # TCR graph
     tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
-    tcr_g = node_embedding_function(tcr_g)
+    tcr_g = compute_residue_embedding(tcr_g, embedding_function)
     # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
     tcr_pt = convert_nx_to_pyg_data(tcr_g)
 
     # pMHC graph
     pmhc_g = build_residue_graph(pmhc_raw_df, pdb_id,  egde_dist_threshold=egde_dist_threshold)
-    pmhc_g = node_embedding_function(pmhc_g)
+    pmhc_g = compute_residue_embedding(pmhc_g, embedding_function)
     # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
     pmh_pt = convert_nx_to_pyg_data(pmhc_g)
 
     return tcr_pt, pmh_pt
+
+def process_pdb(self, path_to_tsv: str = None, pdb_dir: str = None, out_path: Optional[str] = None, seq_embedding_function: Callable = None, is_bound: bool = True, ignore: List[str] = list()):
+    """ reads bound or unbound TCR-pMHC files in a directory
+    if bound; splits the TCR and pMHC complexes
+    then computes seperate residue level graphs with node level embedings
+    and saves these graphs as well as the corresponding stack 
+    of cdr3a, cdr3b and epitope embeddings to a specified directory.
+
+    :param path_to_df: path/to/sequence_dataframe, defaults to None
+    :type data_df: str, optional
+    :param out_path: Path so save data, defaults to None
+    :type out_path: Optional[str], optional
+    :param seq_embedding_function: _description_, defaults to None
+    :type seq_embedding_function: Callable, optional
+    :param is_bound: _description_, defaults to True
+    :type is_bound: bool, optional
+    :param ignore: _description_, defaults to list()
+    :type ignore: List[str], optional
+    """
+    
+    data = pd.read_csv(path_to_tsv, sep='\t')
+    data['path'] = [os.path.join(pdb_dir, str(id)+'.pdb') for id in data['id']]
+
+    for i in tqdm(range(len(data.index))):
+        seq_data = data.iloc[i]
+        # ignore problematic files 
+        if seq_data['id'] in ignore:
+            continue
+
+        # make dir
+        save_dir = os.path.join(out_path, seq_data['id'])
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        if len(os.listdir(save_dir)) == 0:
+            if is_bound:
+                tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=seq_data['path'], pdb_id=seq_data['id'],
+                                                embedding_function=seq_embedding_function,
+                                                egde_dist_threshold=10.)
+            else:
+                # TODO: 
+                raise NotImplementedError
+            # compute sequence embeddings
+            cdr3a_emb = seq_embedding_function(str(seq_data['cdr3a']))
+            cdr3b_emb = seq_embedding_function(str(seq_data['cdr3b']))
+            epitope_emb = seq_embedding_function(str(seq_data['epitope']))
+
+            # save graphs
+            torch.save(tcr_pt, os.path.join(save_dir, "tcr_graph.pt"))
+            torch.save(pmhc_pt, os.path.join(save_dir, "pmhc_graph.pt"))
+
+            # concat and save sequential embeddings
+            seq_emb_stack = torch.vstack((torch.tensor(cdr3a_emb, cdr3b_emb, epitope_emb)))
+            torch.save(seq_emb_stack, os.path.join(save_dir, "seq_emb.pt"))
+
+            # we do not need to save the label as it is stored in self.data
+
+        else:
+            continue

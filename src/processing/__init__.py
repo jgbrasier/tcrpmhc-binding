@@ -1,1 +1,2 @@
-from .pdb_graph import process_bound_pdb
+from .graph import process_pdb
+from .seq import embed_seq_data
