@@ -22,6 +22,18 @@ class TCRpMHCGraphDataset(Dataset):
         self.node_embedding_func: Callable = None
 
     def process_pdb(self, out_path: Optional[str] = None, node_embedding_function: Callable = None, ignore: List[str] = list()):
+        """ reads TCR-pMHC files in a directory, splits them into 
+        TCR and pMHC residue level graphs with node level embedings
+        and saves these graphs to a specified directory.
+
+        :param out_path: Path so save .pt graphs, defaults to None
+        :type out_path: Optional[str], optional
+        :param node_embedding_function: function to assign residue embeddings. 
+        Input a nx.Graph and outputs a nx.Graph, defaults to None
+        :type node_embedding_function: Callable, optional
+        :param ignore: List of potential problematic pdb files to ignore., defaults to list()
+        :type ignore: List[str], optional
+        """
         
         self.node_embedding_func = node_embedding_function
 
