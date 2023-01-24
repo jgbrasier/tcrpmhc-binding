@@ -1,19 +1,25 @@
-from functools import partial
-from typing import Optional
-
+from typing import Callable, Dict, Generator, List, Optional
+import string
 import re
+import os
+
 import pandas as pd
-import networkx as nx
 from biopandas.pdb import PandasPdb
 
+import networkx as nx
+from tqdm import tqdm
+
 import torch
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Dataset
 
 from prody import parsePDBHeader
+
+from functools import partial
 from graphein.protein.graphs import process_dataframe, deprotonate_structure, convert_structure_to_centroids, subset_structure_to_atom_type, filter_hetatms, remove_insertions
 from graphein.protein.graphs import initialise_graph_with_metadata, add_nodes_to_graph, compute_edges
 from graphein.protein.edges import add_peptide_bonds, add_hydrogen_bond_interactions, add_distance_threshold
 from graphein.protein import plotly_protein_structure_graph
+
 
 def find_chain_names(header: dict):
     flag_dict = {
@@ -149,28 +155,51 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
 
     return data
 
-if __name__=='__main__':
-    import os
-    datadir = 'data/pdb/iedb_3d_resolved'
-    pdb_code = '1QRN'
-    pdb_path = os.path.join(datadir, pdb_code+'.pdb')
 
-    data = pd.read_csv('data/preprocessed/iedb_3d_binding_test.tsv', sep='\t')
-    epitope = data[data['id'] == pdb_code]['epitope'].str.lower().values
-    raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path)
+class TCRpMHCGraphDataset(Dataset):
+    def __init__(self, pdb_dir: str, tsv_path: str): 
+        
+        self.pdb_dir = pdb_dir
+        self.tsv_path = tsv_path
 
-    print(header['chain_key_dict'])
-    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
+        # load data
+        self.data = pd.read_csv(tsv_path, sep='\t')
+        self.data['path'] = [os.path.join(self.pdb_dir, str(id)+'.pdb') for id in self.data['id']]
 
-    tcr_g = build_residue_graph(tcr_raw_df, pdb_code)
-    pmhc_g = build_residue_graph(pmhc_raw_df, pdb_code)
+        self.node_embedding_func: Callable = None
 
-    p = plotly_protein_structure_graph(
-        tcr_g,
-        colour_edges_by="kind",
-        colour_nodes_by="seq_position",
-        label_node_ids=False,
-        plot_title="{} TCR alpha/beta chain Residue Graph".format(pdb_code),
-        node_size_multiplier=1
-        )
-    p.show()
+    def process_pdb(self, out_path: Optional[str] = None, node_embedding_function: Callable = None, ignore: List[str] = list()):
+        
+        self.node_embedding_func = node_embedding_function
+
+        for i in tqdm(range(len(self.data.index))):
+            seq_data = self.data.iloc[i]
+            # ignore problematic files 
+            if seq_data['id'] in ignore:
+                continue
+
+            # make dir
+            save_dir = os.path.join(out_path, seq_data['id'])
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            if len(os.listdir(save_dir)) == 0:
+                raw_df, header = read_pdb_to_dataframe(pdb_path=seq_data['path'])
+                tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
+                
+                # TCR graph
+                tcr_g = build_residue_graph(tcr_raw_df, seq_data['id'], egde_dist_threshold=10.)
+                tcr_g = node_embedding_function(tcr_g)
+                # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
+                tcr_pt = convert_nx_to_pyg_data(tcr_g)
+
+                # pMHC graph
+                pmhc_g = build_residue_graph(pmhc_raw_df, seq_data['id'],  egde_dist_threshold=10.)
+                pmhc_g = node_embedding_function(pmhc_g)
+                # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
+                pmh_pt = convert_nx_to_pyg_data(pmhc_g)
+
+                # save graphs
+                torch.save(tcr_pt, os.path.join(save_dir, f"{seq_data['id']}_tcr.pt"))
+                torch.save(tcr_pt, os.path.join(save_dir, f"{seq_data['id']}_pmhc.pt"))
+            else:
+                continue
