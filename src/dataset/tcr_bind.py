@@ -1,121 +1,86 @@
 from typing import Callable, Dict, Generator, List, Optional
+from collections import namedtuple
 import os
 
 from tqdm import tqdm
 import pandas as pd
 
 import torch
-from torch_geometric.data import Data, Dataset
+from torch_geometric.data import Data
+from torch.utils.data import Dataset
 
-from src.processing import process_bound_pdb
+from graphein.protein.features.sequence.embeddings import compute_esm_embedding
 
-from graphein.protein.features.sequence.embeddings import esm_residue_embedding, compute_esm_embedding
+class TCRPartialDataset(Dataset):
+    """
+    Dataset for loading tcr data stored in list of folders
+    """
+    def __init__(self, paths: List[str], _type: str, 
+                _device: torch.device = torch.device('cpu')) -> None:
 
+        super().__init__()
+
+        assert _type in ['cdr3a_seq_emb', 'cdr3b_seq_emb', 'epitope_seq_emb','tcr_graph', 'pmhc_graph']
+        self._type = _type
+        self.paths = paths
+        self._device = _device
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+
+        file_name = +str(self._type)+'.pt'
+        file_paths = [os.path.join(path, file_name) for path in self.paths[index]]
+        torch.load(file_paths, map_location=self._device)
 
 class TCRBindDataset(Dataset):
-    def __init__(self, pdb_dir: str, tsv_path: str): 
-        
-        self.pdb_dir = pdb_dir
-        self.tsv_path = tsv_path
+    def __init__(self, tsv_path: str, data_dir: str, test: bool = False): 
 
         # load data
-        self.data = pd.read_csv(tsv_path, sep='\t')
-        self.data['path'] = [os.path.join(self.pdb_dir, str(id)+'.pdb') for id in self.data['id']]
+        self.df = pd.read_csv(tsv_path, sep='\t')
+        self.data_dir = data_dir
+        self.df['path'] = [os.path.join(self.data_dir, str(id)) for id in self.df['id']]
 
-        # initialize sequence embeddings dictionary
-        self.embeddings = {"cdr3a": [], "cdr3b": [], "epitope": []}
+        self._test = test
 
-        self.node_embedding_func: Callable = None
-        self.seq_embedding_func: Callable = None
-
-    def process_bound_data(self, out_path: Optional[str] = None, node_embedding_function: Callable = None, ignore: List[str] = list()):
-        """ reads TCR-pMHC files in a directory, splits them into 
-        TCR and pMHC residue level graphs with node level embedings
-        and saves these graphs as well as the corresponding stack 
-        of cdr3a, cdr3b and epitope embeddings, to a specified directory.
+        self.cdr3a_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3a_seq_emb')
+        self.cdr3b_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3b_seq_emb')
+        self.epitope_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='epitope_seq_emb')
+        self.tcr_graph_dataset = TCRPartialDataset(self.df['path'], _type='tcr_graph')
+        self.pmhc_graph_dataset = TCRPartialDataset(self.df['path'], _type='pmhc_graph')
 
 
-        :param out_path: Path so save .pt graphs, defaults to None
-        :type out_path: Optional[str], optional
-        :param node_embedding_function: function to assign residue embeddings. 
-        Input a nx.Graph and outputs a nx.Graph, defaults to None
-        :type node_embedding_function: Callable, optional
-        :param ignore: List of potential problematic pdb files to ignore., defaults to list()
-        :type ignore: List[str], optional
-        """
-        
-        self.node_embedding_func = node_embedding_function
+        assert len(self.cdr3a_seq_emb_dataset) == len(self.cdr3b_seq_emb_dataset) \
+            and len(self.cdr3b_seq_emb_dataset) == len(self.epitope_seq_emb_dataset) \
+            and len(self.epitope_seq_emb_dataset) == len(self.tcr_graph_dataset) \
+            and len(self.tcr_graph_dataset) == len(self.pmhc_graph_dataset), \
+            "Dataset length mismatch: \n \
+                cdr3a_seq_emb_dataset: {} \n \
+                cdr3b_seq_emb_dataset: {} \n \
+                epitope_seq_emb_dataset: {} \n \
+                tcr_graph_dataset: {} \n \
+                pmhc_graph_dataset: {} \
+                    ".format(len(self.cdr3a_seq_emb_dataset), len(self.cdr3b_seq_emb_dataset), len(self.epitope_seq_emb_dataset), \
+                        len(self.tcr_graph_dataset), len(self.pmhc_graph_dataset))
 
-        if isinstance(self.embeddings, dict):
-            raise TypeError("Sequence residue embeddings need to be computed using `embed_seq_data`")
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
 
-        for i in tqdm(range(len(self.data.index))):
-            seq_data = self.data.iloc[i]
-            seq_emb = self.embeddings.iloc[i]
-            # ignore problematic files 
-            if seq_data['id'] in ignore:
-                continue
+        Graph = namedtuple("graph", "tcr pmhc")
+        Emb_Seq = namedtuple("emb_seq", "cdr3a cdr3b epitope")
 
-            # make dir
-            save_dir = os.path.join(out_path, seq_data['id'])
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            if len(os.listdir(save_dir)) == 0:
-                tcr_pt, pmhc_pt = process_bound_pdb(pdb_path=seq_data['path'], pdb_id=seq_data['id'],
-                                                node_embedding_function=node_embedding_function,
-                                                egde_dist_threshold=10.)
-                # save graphs
-                torch.save(tcr_pt, os.path.join(save_dir, "tcr_graph.pt"))
-                torch.save(pmhc_pt, os.path.join(save_dir, "pmhc_graph.pt"))
-
-                # concat and save sequential embeddings
-                seq_emb_stack = torch.vstack((torch.tensor(seq_emb['cdr3a'], seq_emb['cdr3b'], seq_emb['epitope'])))
-                torch.save(seq_emb_stack, os.path.join(save_dir, "seq_emb.pt"))
-
-                # we do not need to save the label as it is stored in self.data
-
-            else:
-                continue
-
-    def embed_seq_data(self, seq_embedding_function: Callable):
-        """Embed cdr3a, cdr3b and epitope sequences using an embedding function of choice
-
-        :param seq_embedding_function: residue level embedding function must take a string of fasta residues as input 
-                                        eg: "AVRPTSGGSYIPT"
-        :type seq_embedding_function: Callable, optional
-        """
-        embedding_dict = {'cdr3a': [], 'cdr3b': [], 'epitope': []}
-        for i in tqdm(range(len(self.data.index))):
-            cdr3a_emb = seq_embedding_function(str(self.data.iloc[i]['cdr3a']))
-            cdr3b_emb = seq_embedding_function(str(self.data.iloc[i]['cdr3b']))
-            epitope_emb = seq_embedding_function(str(self.data.iloc[i]['epitope']))
-
-            embedding_dict['cdr3a'].append(cdr3a_emb)
-            embedding_dict['cdr3b'].append(cdr3b_emb)
-            embedding_dict['epitope'].append(epitope_emb)
-
-            self.embeddings = pd.DataFrame.from_dict(embedding_dict)
-
-
-    def get(self, idx: int):
-        # TODO
-        """
-        Returns 
-         - a tuple of 2 `pytorch_geometric.data.Data` object for TCR graph and pMHC graph respectively,
-         - a tuple of the cdr3a, cdr3b, epitope embeddings
-         - the binary binding label
-
-        :param idx: Index to retrieve.
-        :type idx: int
-        """
-        if self.chain_selection_map is not None:
-            return torch.load(
-                os.path.join(
-                    self.processed_dir,
-                    f"{self.structures[idx]}_{self.chain_selection_map[idx]}.pt",
-                )
-            )
+        if self._test:
+            graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
+            emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
+                    self.epitope_seq_emb_dataset[index])
+            return graph, emb_seq
         else:
-            return torch.load(
-                os.path.join(self.processed_dir, f"{self.structures[idx]}.pt")
-            )
+            label = torch.tensor(self.df.iloc[index]['binding'])
+            graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
+            emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
+                    self.epitope_seq_emb_dataset[index])
+            return graph, emb_seq, label

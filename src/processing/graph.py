@@ -219,30 +219,31 @@ def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, e
 
     return tcr_pt, pmh_pt
 
-def process_pdb(self, path_to_tsv: str = None, pdb_dir: str = None, out_path: Optional[str] = None, seq_embedding_function: Callable = None, is_bound: bool = True, ignore: List[str] = list()):
+def process_pdb(df: pd.DataFrame, pdb_dir: str = None, out_path: str = None, seq_embedding_function: Callable = None, is_bound: bool = True, ignore: List[str] = list()):
     """ reads bound or unbound TCR-pMHC files in a directory
     if bound; splits the TCR and pMHC complexes
-    then computes seperate residue level graphs with node level embedings
-    and saves these graphs as well as the corresponding stack 
-    of cdr3a, cdr3b and epitope embeddings to a specified directory.
+    then for each respective complex, computes residue level graphs with node level embedings
+    then saves these graphs as well as the corresponding stack of cdr3a, cdr3b and epitope embeddings.
+    A unique subdirectory is created for each TCR-pMHC complex
 
-    :param path_to_df: path/to/sequence_dataframe, defaults to None
-    :type data_df: str, optional
+    :param df: sequence dataframe with columns
+        id: unique tcr-pmhc complex identifier
+        cdr3a: tcr alpha sequence
+        cdr3b: tcr beta sequence
+        epitope: biding peptide sequence
+    :type data_df: pd.DataFrame
     :param out_path: Path so save data, defaults to None
-    :type out_path: Optional[str], optional
+    :type out_path: str
     :param seq_embedding_function: _description_, defaults to None
-    :type seq_embedding_function: Callable, optional
+    :type seq_embedding_function: Callable
     :param is_bound: _description_, defaults to True
     :type is_bound: bool, optional
     :param ignore: _description_, defaults to list()
     :type ignore: List[str], optional
     """
-    
-    data = pd.read_csv(path_to_tsv, sep='\t')
-    data['path'] = [os.path.join(pdb_dir, str(id)+'.pdb') for id in data['id']]
 
-    for i in tqdm(range(len(data.index))):
-        seq_data = data.iloc[i]
+    for i in tqdm(range(len(df.index))):
+        seq_data = df.iloc[i]
         # ignore problematic files 
         if seq_data['id'] in ignore:
             continue
@@ -252,25 +253,27 @@ def process_pdb(self, path_to_tsv: str = None, pdb_dir: str = None, out_path: Op
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
         if len(os.listdir(save_dir)) == 0:
+            path = os.path.join(pdb_dir, str(seq_data['id'])+'.pdb')
             if is_bound:
-                tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=seq_data['path'], pdb_id=seq_data['id'],
+                tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=path, pdb_id=seq_data['id'],
                                                 embedding_function=seq_embedding_function,
                                                 egde_dist_threshold=10.)
             else:
                 # TODO: 
                 raise NotImplementedError
             # compute sequence embeddings
-            cdr3a_emb = seq_embedding_function(str(seq_data['cdr3a']))
-            cdr3b_emb = seq_embedding_function(str(seq_data['cdr3b']))
-            epitope_emb = seq_embedding_function(str(seq_data['epitope']))
+            cdr3a_emb = torch.tensor(seq_embedding_function(str(seq_data['cdr3a'])))
+            cdr3b_emb = torch.tensor(seq_embedding_function(str(seq_data['cdr3b'])))
+            epitope_emb = torch.tensor(seq_embedding_function(str(seq_data['epitope'])))
 
             # save graphs
             torch.save(tcr_pt, os.path.join(save_dir, "tcr_graph.pt"))
             torch.save(pmhc_pt, os.path.join(save_dir, "pmhc_graph.pt"))
 
-            # concat and save sequential embeddings
-            seq_emb_stack = torch.vstack((torch.tensor(cdr3a_emb, cdr3b_emb, epitope_emb)))
-            torch.save(seq_emb_stack, os.path.join(save_dir, "seq_emb.pt"))
+            # save sequential embeddings
+            torch.save(cdr3a_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
+            torch.save(cdr3b_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
+            torch.save(epitope_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
 
             # we do not need to save the label as it is stored in self.data
 
