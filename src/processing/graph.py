@@ -272,8 +272,8 @@ def process_pdb(df: pd.DataFrame, pdb_dir: str = None, out_path: str = None, seq
 
             # save sequential embeddings
             torch.save(cdr3a_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
-            torch.save(cdr3b_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
-            torch.save(epitope_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
+            torch.save(cdr3b_emb, os.path.join(save_dir, "cdr3b_seq_emb.pt"))
+            torch.save(epitope_emb, os.path.join(save_dir, "epitope_seq_emb.pt"))
 
             # we do not need to save the label as it is stored in self.data
 
