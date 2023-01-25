@@ -18,7 +18,7 @@ class LightningGCNN(pl.LightningModule):
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
     def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2,
-                learning_rate = 0.001, device = torch.device('cpu')):
+                include_sequence: bool = False, learning_rate = 0.001, device = torch.device('cpu')):
         super(self).__init__()
         print('GCNN Loaded')
 
@@ -88,8 +88,11 @@ class LightningGCNN(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        count, (prot_1, prot_2, label) = batch
-        output = self(prot_1, prot_2)
+        if self.hparams.include_sequence:
+            graph, emb_seq, label = batch
+        else:
+            graph, label = batch
+        output = self(graph.prot_1, graph.prot_2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
@@ -97,8 +100,11 @@ class LightningGCNN(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        count, (prot_1, prot_2, label) = batch
-        output = self(prot_1, prot_2)
+        if self.hparams.include_sequence:
+            graph, emb_seq, label = batch
+        else:
+            graph, label = batch
+        output = self(graph.prot_1, graph.prot_2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
@@ -106,8 +112,11 @@ class LightningGCNN(pl.LightningModule):
         return loss
     
     def test_step(self, batch, batch_idx):
-        count, (prot_1, prot_2, label) = batch
-        output = self(prot_1, prot_2)
+        if self.hparams.include_sequence:
+            graph, emb_seq, label = batch
+        else:
+            graph, label = batch
+        output = self(graph.prot_1, graph.prot_2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
