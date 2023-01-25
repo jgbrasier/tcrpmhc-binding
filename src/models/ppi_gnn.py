@@ -20,7 +20,6 @@ class LightningGCNN(pl.LightningModule):
     def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2,
                 include_sequence: bool = False, learning_rate = 0.001, device = torch.device('cpu')):
         super(self).__init__()
-        print('GCNN Loaded')
 
         self.save_hyperparameters()
 
@@ -187,10 +186,6 @@ class GCNN(nn.Module):
         out = self.sigmoid(out)
         return out
         
-
-net = GCNN()
-print(net)
-
 """# GAT"""
 
 class AttGNN(nn.Module):

@@ -46,6 +46,7 @@ class PPIDataset(Dataset):
 class PPIDataModule(pl.LightningDataModule):
     def __init__(self, npy_file: str = None, processed_dir: str = None, 
                 batch_size: int = 32, num_worker: int = 0):
+        super(self).__init__()
         self.save_hyperparameters()
 
         self.dataset = PPIDataset(npy_file = npy_file, processed_dir= processed_dir)
