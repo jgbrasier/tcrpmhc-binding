@@ -37,14 +37,12 @@ class TCRPartialDataset(Dataset):
         torch.load(file_paths, map_location=self._device)
 
 class TCRBindDataset(Dataset):
-    def __init__(self, tsv_path: str, data_dir: str, test: bool = False): 
+    def __init__(self, tsv_path: str, data_dir: str): 
 
         # load data
         self.df = pd.read_csv(tsv_path, sep='\t')
         self.data_dir = data_dir
         self.df['path'] = [os.path.join(self.data_dir, str(id)) for id in self.df['id']]
-
-        self._test = test
 
         self.cdr3a_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3a_seq_emb')
         self.cdr3b_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3b_seq_emb')
@@ -73,14 +71,14 @@ class TCRBindDataset(Dataset):
         Graph = namedtuple("graph", "tcr pmhc")
         Emb_Seq = namedtuple("emb_seq", "cdr3a cdr3b epitope")
 
-        if self._test:
-            graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
-            emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
-                    self.epitope_seq_emb_dataset[index])
-            return graph, emb_seq
-        else:
-            label = torch.tensor(self.df.iloc[index]['binding'])
-            graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
-            emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
-                    self.epitope_seq_emb_dataset[index])
-            return graph, emb_seq, label
+        # if self._test:
+        #     graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
+        #     emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
+        #             self.epitope_seq_emb_dataset[index])
+        #     return graph, emb_seq
+        # else:
+        label = torch.tensor(self.df.iloc[index]['binding'])
+        graph = Graph(self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index])
+        emb_seq = Emb_Seq(self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], \
+                self.epitope_seq_emb_dataset[index])
+        return graph, emb_seq, label

@@ -25,6 +25,13 @@ class GlobalMaxPool1D(nn.Module):
         return torch.max(input, axis=self.step_axis).values
 
 class LightningNetTCR(pl.LightningModule):
+    """
+    Model from:
+    Montemurro, A., Schuster, V., Povlsen, H.R. et al. 
+    NetTCR-2.0 enables accurate prediction of TCR-peptide binding 
+    by using paired TCRα and β sequence data. 
+    Commun Biol 4, 1060 (2021). https://doi.org/10.1038/s42003-021-02610-3
+    """
     def __init__(self, peptide_len: int, cdra_len: int,cdrb_len: int, batch_size=16, 
                 n_kernels: int = 5, n_filters: int = 16, hidden_dim: int = 32, device='cpu'):
         super().__init__()
@@ -146,43 +153,6 @@ class NetTCR(nn.Module):
         pep_out = torch.cat(pep_out_list, dim=1)
         cdra_out = torch.cat(cdra_out_list, dim=1)
         cdrb_out = torch.cat(cdrb_out_list, dim=1)
-
-        # pep_out_1 = self.activation(self.pep_conv[0](x_peptide))
-        # pep_out_1 = self.pool(pep_out_1)
-        # pep_out_3 = self.activation(self.pep_conv[1](x_peptide))
-        # pep_out_3 = self.pool(pep_out_3)
-        # pep_out_5 = self.activation(self.pep_conv[2](x_peptide))
-        # pep_out_5 = self.pool(pep_out_5)
-        # pep_out_7 = self.activation(self.pep_conv[3](x_peptide))
-        # pep_out_7 = self.pool(pep_out_7)
-        # pep_out_9 = self.activation(self.pep_conv[4](x_peptide))
-        # pep_out_9 = self.pool(pep_out_9)
-
-        # cdra_out_1 = self.activation(self.cdra_conv[0](x_cdra))
-        # cdra_out_1 = self.pool(cdra_out_1)
-        # cdra_out_3 = self.activation(self.cdra_conv[1](x_cdra))
-        # cdra_out_3 = self.pool(cdra_out_3)
-        # cdra_out_5 = self.activation(self.cdra_conv[2](x_cdra))
-        # cdra_out_5 = self.pool(cdra_out_5)
-        # cdra_out_7 = self.activation(self.cdra_conv[3](x_cdra))
-        # cdra_out_7 = self.pool(cdra_out_7)
-        # cdra_out_9 = self.activation(self.cdra_conv[4](x_cdra))
-        # cdra_out_9 = self.pool(cdra_out_9)
-
-        # cdrb_out_1 = self.activation(self.cdrb_conv[0](x_cdrb))
-        # cdrb_out_1 = self.pool(cdrb_out_1)
-        # cdrb_out_3 = self.activation(self.cdrb_conv[1](x_cdrb))
-        # cdrb_out_3 = self.pool(cdrb_out_3)
-        # cdrb_out_5 = self.activation(self.cdrb_conv[2](x_cdrb))
-        # cdrb_out_5 = self.pool(cdrb_out_5)
-        # cdrb_out_7 = self.activation(self.cdrb_conv[3](x_cdrb))
-        # cdrb_out_7 = self.pool(cdrb_out_7)
-        # cdrb_out_9 = self.activation(self.cdrb_conv[4](x_cdrb))
-        # cdrb_out_9 = self.pool(cdrb_out_9)
-
-        # pep_out = torch.cat([pep_out_1, pep_out_3, pep_out_5, pep_out_7, pep_out_9], dim=1)
-        # cdra_out = torch.cat([cdra_out_1, cdra_out_3, cdra_out_5, cdra_out_7, cdra_out_9], dim=1)
-        # cdrb_out = torch.cat([cdrb_out_1, cdrb_out_3, cdrb_out_5, cdrb_out_7, cdrb_out_9], dim=1)
 
         out = torch.cat([pep_out, cdra_out, cdrb_out], dim=1)
 
