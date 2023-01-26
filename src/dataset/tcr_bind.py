@@ -17,9 +17,6 @@ class TCRPartialDataset(Dataset):
     """
     def __init__(self, paths: List[str], _type: str, 
                 _device: torch.device = torch.device('cpu')) -> None:
-
-        super().__init__()
-
         assert _type in ['cdr3a_seq_emb', 'cdr3b_seq_emb', 'epitope_seq_emb','tcr_graph', 'pmhc_graph']
         self._type = _type
         self.paths = paths
@@ -50,7 +47,6 @@ class TCRBindDataset(Dataset):
         self.tcr_graph_dataset = TCRPartialDataset(self.df['path'], _type='tcr_graph')
         self.pmhc_graph_dataset = TCRPartialDataset(self.df['path'], _type='pmhc_graph')
 
-
         assert len(self.cdr3a_seq_emb_dataset) == len(self.cdr3b_seq_emb_dataset) \
             and len(self.cdr3b_seq_emb_dataset) == len(self.epitope_seq_emb_dataset) \
             and len(self.epitope_seq_emb_dataset) == len(self.tcr_graph_dataset) \
@@ -68,7 +64,7 @@ class TCRBindDataset(Dataset):
         if torch.is_tensor(index):
             index = index.tolist()
 
-        Graph = namedtuple("graph", "tcr pmhc")
+        Graph = namedtuple("graph", "prot1 prot2")
         Emb_Seq = namedtuple("emb_seq", "cdr3a cdr3b epitope")
 
         # if self._test:
