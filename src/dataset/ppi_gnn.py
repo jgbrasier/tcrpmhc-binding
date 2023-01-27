@@ -22,6 +22,7 @@ class PPIDataset(Dataset):
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
     def __init__(self, npy_file, processed_dir, device=torch.device('cpu')):
+        super().__init__()
         self.npy_ar = np.load(npy_file)
         self.processed_dir = processed_dir
         self.protein_1 = self.npy_ar[:,2]
@@ -40,8 +41,8 @@ class PPIDataset(Dataset):
         Graph = namedtuple("graph", "prot1 prot2")
         prot_1 = os.path.join(self.processed_dir, self.protein_1[index]+".pt")
         prot_2 = os.path.join(self.processed_dir, self.protein_2[index]+".pt")
-        prot_1 = torch.load(glob.glob(prot_1)[0], map_location=self._device)
-        prot_2 = torch.load(glob.glob(prot_2)[0], map_location=self._device)
+        prot_1 = torch.load(prot_1, map_location=self._device)
+        prot_2 = torch.load(prot_2, map_location=self._device)
         label = torch.tensor(self.label[index])
         return Graph(prot_1, prot_2), label
 

@@ -3,6 +3,8 @@ import string
 import re
 import os
 
+import numpy as np
+
 from tqdm import tqdm
 
 import pandas as pd
@@ -154,7 +156,7 @@ def compute_residue_embedding(
 
     return G
 
-def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
+def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str) -> Data:
     # Initialise dict used to construct Data object
     # data = {k: v for k, v in sequence_data.items()}
     data = {"node_id": list(G.nodes())}
@@ -165,16 +167,17 @@ def convert_nx_to_pyg_data(G: nx.Graph) -> Data:
     edge_index = torch.LongTensor(list(G.edges)).t().contiguous()
 
     # Add node features
-    for i, (_, feat_dict) in enumerate(G.nodes(data=True)):
-        for key, value in feat_dict.items():
-            data[str(key)] = [value] if i == 0 else data[str(key)] + [value]
+    node_features = []
+    for i, (n, d) in enumerate(G.nodes(data=True)):
+        node_features.append(G.nodes[n][node_feat_name])
+    data['x'] = torch.from_numpy(np.array(node_features))
 
     # Add edge features
-    for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
-        for key, value in feat_dict.items():
-            data[str(key)] = (
-                [value] if i == 0 else data[str(key)] + [value]
-            )
+    # for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
+    #     for key, value in feat_dict.items():
+    #         data[str(key)] = (
+    #             [value] if i == 0 else data[str(key)] + [value]
+    #         )
 
     # Add graph-level features
     for feat_name in G.graph:
