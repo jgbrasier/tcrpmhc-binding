@@ -156,7 +156,7 @@ def compute_residue_embedding(
 
     return G
 
-def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str) -> Data:
+def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool =False) -> Data:
     # Initialise dict used to construct Data object
     # data = {k: v for k, v in sequence_data.items()}
     data = {"node_id": list(G.nodes())}
@@ -180,8 +180,10 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str) -> Data:
     #         )
 
     # Add graph-level features
-    for feat_name in G.graph:
-        data[str(feat_name)] = [G.graph[feat_name]]
+    if graph_features:
+        for feat_name in G.graph:
+            if not str(feat_name).startswith('sequence'):
+                data[str(feat_name)] = [G.graph[feat_name]]
 
     data["edge_index"] = edge_index.view(2, -1)
     data = Data.from_dict(data)

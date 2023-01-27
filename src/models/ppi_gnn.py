@@ -17,7 +17,7 @@ class LightningGCNN(pl.LightningModule):
     Jha, K., Saha, S. & Singh, H. Prediction of protein–protein interaction using graph neural networks. 
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
-    def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2,
+    def __init__(self, n_output=1, num_features_pro= 1280, output_dim=128, dropout=0.2,
                 include_sequence: bool = False, learning_rate = 0.001, device = torch.device('cpu')):
         super().__init__()
 
@@ -43,11 +43,11 @@ class LightningGCNN(pl.LightningModule):
         self.loss_fn = nn.MSELoss()
         self.accuracy = BinaryAccuracy(threshold=0.5)
 
-    def forward(self,  pro1_data, pro2_data):
+    def forward(self, pro1_data, pro2_data):
         #get graph input for protein 1 
-        pro1_x, pro1_edge_index, pro1_batch = pro1_data.x, pro1_data.edge_index, pro1_data.batch
+        pro1_x, pro1_edge_index, pro1_batch = pro1_data.x.type(torch.float), pro1_data.edge_index.type(torch.int64), pro1_data.batch
         # get graph input for protein 2
-        pro2_x, pro2_edge_index, pro2_batch = pro2_data.x, pro2_data.edge_index, pro2_data.batch
+        pro2_x, pro2_edge_index, pro2_batch = pro2_data.x.type(torch.float), pro2_data.edge_index.type(torch.int64), pro2_data.batch
 
         x = self.pro1_conv1(pro1_x, pro1_edge_index)
         x = self.relu(x)
@@ -87,11 +87,9 @@ class LightningGCNN(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        if self.hparams.include_sequence:
-            graph, emb_seq, label = batch
-        else:
-            graph, label = batch
-        output = self(graph.prot_1, graph.prot_2)
+        prot1, prot2, label = batch
+        label = label.type(torch.float) # output is float32 needs to match
+        output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
@@ -99,11 +97,8 @@ class LightningGCNN(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        if self.hparams.include_sequence:
-            graph, emb_seq, label = batch
-        else:
-            graph, label = batch
-        output = self(graph.prot_1, graph.prot_2)
+        prot1, prot2, label = batch
+        output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
@@ -111,11 +106,8 @@ class LightningGCNN(pl.LightningModule):
         return loss
     
     def test_step(self, batch, batch_idx):
-        if self.hparams.include_sequence:
-            graph, emb_seq, label = batch
-        else:
-            graph, label = batch
-        output = self(graph.prot_1, graph.prot_2)
+        prot1, prot2, label = batch
+        output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
         acc = self.accuracy(output, label)
         self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
