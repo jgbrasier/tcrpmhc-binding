@@ -9,7 +9,9 @@ from torch.optim.lr_scheduler import MultiStepLR
 import pytorch_lightning as pl
 
 from torchmetrics.classification.accuracy import BinaryAccuracy
-
+from torchmetrics.classification.auroc import BinaryAUROC
+from torchmetrics.classification.precision_recall import BinaryPrecision, BinaryRecall
+from torchmetrics.classification.f_beta import BinaryF1Score
 
 class LightningGCNN(pl.LightningModule):
     """
@@ -41,7 +43,11 @@ class LightningGCNN(pl.LightningModule):
         self.out = nn.Linear(64, self.hparams.n_output)
 
         self.loss_fn = nn.MSELoss()
-        self.accuracy = BinaryAccuracy(threshold=0.5)
+        self._acc = BinaryAccuracy()
+        self._precision = BinaryPrecision()
+        self._recall = BinaryRecall()
+        self._f1 = BinaryF1Score()
+        self._auroc = BinaryAUROC()
 
     def forward(self, pro1_data, pro2_data):
         #get graph input for protein 1 
@@ -91,27 +97,41 @@ class LightningGCNN(pl.LightningModule):
         label = label.type(torch.float) # output is float32 needs to match
         output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
-        acc = self.accuracy(output, label)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("train_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
     def validation_step(self, batch, batch_idx):
         prot1, prot2, label = batch
         output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
-        acc = self.accuracy(output, label)
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
         self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
     
     def test_step(self, batch, batch_idx):
         prot1, prot2, label = batch
         output = self(prot1, prot2)
         loss = self.loss_fn(output, label)
-        acc = self.accuracy(output, label)
-        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("test_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
+        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
 

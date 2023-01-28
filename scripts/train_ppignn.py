@@ -29,10 +29,6 @@ print("Train len:", len(ppi_data.train))
 test_loader = ppi_data.test_dataloader()
 print("Test len:",len(ppi_data.test))
 
-# for p1, p2, label in train_loader:
-#     print(p1.x)
-#     print(p2.edge_index)
-#     break
 
 ppigcnn = LightningGCNN(num_features_pro=1280) # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint','pan-human-data', 'ppi_gnn'), save_top_k=1, monitor='val_acc')
