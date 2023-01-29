@@ -18,8 +18,8 @@ from src.models import LightningGCNN
 
 npy_file =  'data/preprocessed/human_data.npy'
 processed_dir =  'data/graphs/pan_human'
-BATCH_SIZE = 4
-SEED = 42
+BATCH_SIZE = 8
+SEED = 20
 EPOCHS = 50
 ppi_data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
 ppi_data.setup(train_size=0.8, random_seed=SEED)
@@ -31,7 +31,7 @@ print("Test len:",len(ppi_data.test))
 
 
 ppigcnn = LightningGCNN(num_features_pro=1280) # ESM embedding dim: 1280
-checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint','pan-human-data', 'ppi_gnn'), save_top_k=1, monitor='val_acc')
+checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint','pan-human-data', 'ppi_gnn'), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs','pan-human-data'), name='ppi_gnn')
 trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], log_every_n_steps=10, check_val_every_n_epoch=1)
 trainer.fit(ppigcnn, train_dataloaders=train_loader, val_dataloaders=test_loader)
