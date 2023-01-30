@@ -6,6 +6,33 @@ import math
 import numpy as np
 import pandas as pd
 
+from typing import Callable, Dict, Generator, List, Optional
+
+import torch
+from torch.utils.data import Dataset
+
+class PartialDataset(Dataset):
+    """
+    Dataset for loading list of .pt graph files
+    """
+    def __init__(self, paths: List[str], 
+                _device: torch.device = torch.device('cpu')) -> None:
+        self.paths = paths
+        self._device = _device
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+        data = torch.load(self.paths[index], map_location=self._device)
+        # data.x = data.x.type(torch.float)
+        # data.edge_index = data.edge_index.type(torch.int64)
+        # data.edge_index = data.edge_index.type(torch.int64)
+        return data
+
+
 def mkdir(outdir):
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -146,5 +173,5 @@ def hard_split_df(
 
     print(f"Target {target_col} sequences: {selected_target_val}")
 
-    return train_df, test_df, selected_target_val
+    return train_df.reset_index(drop=True), test_df.reset_index(drop=True), selected_target_val
 

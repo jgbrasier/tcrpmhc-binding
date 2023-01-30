@@ -106,6 +106,7 @@ def read_pdb_to_dataframe(
 
     return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
 
+
 def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict):
     # each value of chain_key_dict is a list, can concatenate using +
     tcr_df = df.loc[df['chain_id'].isin(chain_key_dict['tra']+chain_key_dict['trb'])]
@@ -115,19 +116,23 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict):
     return tcr_df, pmhc_df
 
 
-def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =10.):
+def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =6.):
 
-    atom_processing_funcs = [deprotonate_structure, remove_insertions, convert_structure_to_centroids]
+    atom_processing_funcs = [deprotonate_structure, remove_insertions]
     
-    df = process_dataframe(raw_df, atom_df_processing_funcs=atom_processing_funcs)
+    df = process_dataframe(raw_df,
+                            chain_selection = "all",
+                            insertions = False,
+                            deprotonate = True,
+                            keep_hets = [],
+                            granularity='CA') # alpha carbon
     g = initialise_graph_with_metadata(protein_df=df, # from above cell
                                    raw_pdb_df=raw_df, # Store this for traceability
                                    pdb_code = pdb_code, #and again
-                                   granularity = "centroid" # Store this so we know what kind of graph we have
+                                   granularity = "CA" # Store this so we know what kind of graph we have
                                   )
     g = add_nodes_to_graph(g)
-    g = compute_edges(g, get_contacts_config=None, funcs=[partial(add_distance_threshold, long_interaction_threshold=5, threshold=egde_dist_threshold)])
-
+    g = compute_edges(g, funcs=[partial(add_distance_threshold, long_interaction_threshold=1, threshold=egde_dist_threshold)])
     return g
 
 def compute_residue_embedding(
@@ -137,7 +142,7 @@ def compute_residue_embedding(
     """
     Computes residue embeddings from a protein sequence and adds the to the graph.
 
-    :param G: ``nx.Graph`` to add esm embedding to.
+    :param G: ``nx.Graph`` to add    esm embedding to.
     :type G: nx.Graph
     :param embedding_function: function to compute residue embedding from protein sequence
     :type embedding_function: Callable
@@ -191,7 +196,7 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool
 
     return data
 
-def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, egde_dist_threshold: int = 10.):
+def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, egde_dist_threshold: int = 6.):
     """ 
     reads bound TCR-pMHC files in a directory, splits them into 
     TCR and pMHC residue level graphs with node level embedings
@@ -202,7 +207,7 @@ def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, e
     :type pdb_id: str
     :param embedding_function: function to compute residue embedding from protein sequence
     :type embedding_function: Callable
-    :param egde_dist_threshold: inter-residue distance to build graph edges, defaults to 10.
+    :param egde_dist_threshold: inter-residue distance to build graph edges, defaults to 6.
     :type egde_dist_threshold: int, optional
     :return: TCR and pMHC residue level graphs
     :rtype: tuple(PyTorch Geometric graphs)
@@ -214,73 +219,67 @@ def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, e
     tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
     tcr_g = compute_residue_embedding(tcr_g, embedding_function)
     # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
-    tcr_pt = convert_nx_to_pyg_data(tcr_g)
+    tcr_pt = convert_nx_to_pyg_data(tcr_g, node_feat_name='embedding')
 
     # pMHC graph
     pmhc_g = build_residue_graph(pmhc_raw_df, pdb_id,  egde_dist_threshold=egde_dist_threshold)
     pmhc_g = compute_residue_embedding(pmhc_g, embedding_function)
     # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
-    pmh_pt = convert_nx_to_pyg_data(pmhc_g)
+    pmh_pt = convert_nx_to_pyg_data(pmhc_g, node_feat_name='embedding')
 
     return tcr_pt, pmh_pt
 
-def process_pdb(df: pd.DataFrame, pdb_dir: str = None, out_path: str = None, seq_embedding_function: Callable = None, is_bound: bool = True, ignore: List[str] = list()):
-    """ reads bound or unbound TCR-pMHC files in a directory
+def process_pdb(pdb_list: List[str], pdb_dir: str = None, out_path: str = None, seq_embedding_function: Callable = None, \
+                is_bound: bool = True, save_sequence: bool = False, ignore: List[str] = list()):
+    """reads bound or unbound TCR-pMHC files in a directory
     if bound; splits the TCR and pMHC complexes
     then for each respective complex, computes residue level graphs with node level embedings
     then saves these graphs as well as the corresponding stack of cdr3a, cdr3b and epitope embeddings.
     A unique subdirectory is created for each TCR-pMHC complex
 
-    :param df: sequence dataframe with columns
-        id: unique tcr-pmhc complex identifier
-        cdr3a: tcr alpha sequence
-        cdr3b: tcr beta sequence
-        epitope: biding peptide sequence
-    :type data_df: pd.DataFrame
-    :param out_path: Path so save data, defaults to None
-    :type out_path: str
+    :param pdb_list: list of pdb ids to process
+    :type pdb_list: List[str]
+    :param pdb_dir: directory where pdb files live, defaults to None
+    :type pdb_dir: str, optional
+    :param out_path: directory to save processed graphs, defaults to None
+    :type out_path: str, optional
     :param seq_embedding_function: _description_, defaults to None
-    :type seq_embedding_function: Callable
-    :param is_bound: _description_, defaults to True
-    :type is_bound: bool, optional
-    :param ignore: _description_, defaults to list()
+    :type seq_embedding_function: Callable, optional
+    :param save_sequence: _description_, defaults to False
+    :type save_sequence: bool, optional
+    :param ignore: list of pdb ids to ignore, defaults to list()
     :type ignore: List[str], optional
     """
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
 
-    for i in tqdm(range(len(df.index))):
-        seq_data = df.iloc[i]
-        # ignore problematic files 
-        if seq_data['id'] in ignore:
+    for pdb_id in tqdm(pdb_list):
+        # ignore problematic files
+        if pdb_id in ignore:
             continue
-
+        pdb_path = os.path.join(pdb_dir, str(pdb_id)+'.pdb')
         # make dir
-        save_dir = os.path.join(out_path, seq_data['id'])
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        if len(os.listdir(save_dir)) == 0:
-            path = os.path.join(pdb_dir, str(seq_data['id'])+'.pdb')
-            if is_bound:
-                tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=path, pdb_id=seq_data['id'],
-                                                embedding_function=seq_embedding_function,
-                                                egde_dist_threshold=10.)
-            else:
-                # TODO: 
-                raise NotImplementedError
-            # compute sequence embeddings
+        if is_bound:
+            tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=pdb_path, pdb_id=pdb_id,
+                                            embedding_function=seq_embedding_function,
+                                            egde_dist_threshold=6.)
+        else:
+            # TODO: for unbound data 
+            raise NotImplementedError
+        # compute sequence embeddings
+        if save_sequence:
+            # TODO: sequence embeddings
+            raise NotImplementedError
             cdr3a_emb = torch.tensor(seq_embedding_function(str(seq_data['cdr3a'])))
             cdr3b_emb = torch.tensor(seq_embedding_function(str(seq_data['cdr3b'])))
             epitope_emb = torch.tensor(seq_embedding_function(str(seq_data['epitope'])))
-
-            # save graphs
-            torch.save(tcr_pt, os.path.join(save_dir, "tcr_graph.pt"))
-            torch.save(pmhc_pt, os.path.join(save_dir, "pmhc_graph.pt"))
-
             # save sequential embeddings
             torch.save(cdr3a_emb, os.path.join(save_dir, "cdr3a_seq_emb.pt"))
             torch.save(cdr3b_emb, os.path.join(save_dir, "cdr3b_seq_emb.pt"))
             torch.save(epitope_emb, os.path.join(save_dir, "epitope_seq_emb.pt"))
 
-            # we do not need to save the label as it is stored in self.data
+        # save graphs
+        torch.save(tcr_pt, os.path.join(out_path, f"{pdb_id}_tcr.pt"))
+        torch.save(pmhc_pt, os.path.join(out_path, f"{pdb_id}_pmhc.pt"))
 
-        else:
-            continue
+        # we do not need to save the label as it is stored in self.data

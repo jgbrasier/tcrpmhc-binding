@@ -13,29 +13,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Batch
 
+from src.utils import PartialDataset
+
 
 import pytorch_lightning as pl
-
-class PartialDataset(Dataset):
-    """
-    Dataset for loading list of .pt graph files
-    """
-    def __init__(self, paths: List[str], 
-                _device: torch.device = torch.device('cpu')) -> None:
-        self.paths = paths
-        self._device = _device
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, index):
-        if torch.is_tensor(index):
-            index = index.tolist()
-        data = torch.load(self.paths[index], map_location=self._device)
-        # data.x = data.x.type(torch.float)
-        # data.edge_index = data.edge_index.type(torch.int64)
-        # data.edge_index = data.edge_index.type(torch.int64)
-        return data
 
 class PPIDataset(Dataset):
     """

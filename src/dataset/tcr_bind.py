@@ -14,46 +14,29 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
 from graphein.protein.features.sequence.embeddings import compute_esm_embedding
+from src.utils import PartialDataset
 
-class TCRPartialDataset(Dataset):
-    """
-    Dataset for loading tcr data stored in list of folders
-    """
-    def __init__(self, paths: List[str], _type: str, 
-                _device: torch.device = torch.device('cpu')) -> None:
-        assert _type in ['cdr3a_seq_emb', 'cdr3b_seq_emb', 'epitope_seq_emb','tcr_graph', 'pmhc_graph']
-        self._type = _type
-        self.paths = paths
-        self._device = _device
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, index):
-        if torch.is_tensor(index):
-            index = index.tolist()
-
-        file_name = +str(self._type)+'.pt'
-        file_paths = [os.path.join(path, file_name) for path in self.paths[index]]
-        torch.load(file_paths, map_location=self._device)
 
 class TCRBindDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, data_dir: str, include_seq_data: bool = False): 
+    def __init__(self, df: pd.DataFrame, data_dir: str, include_seq_data: bool = False, device=torch.device('cpu')): 
 
         # load data
         self.df = df
         self.data_dir = data_dir
-        self.df['path'] = [os.path.join(self.data_dir, str(id)) for id in self.df['id']]
+        self.df['tcr_path'] = [os.path.join(self.data_dir, str(id)+'_tcr.pt') for id in self.df['tcr_id']]
+        self.df['pmhc_path'] = [os.path.join(self.data_dir, str(id)+'_pmhc.pt') for id in self.df['pmhc_id']]
 
 
-        self.tcr_graph_dataset = TCRPartialDataset(self.df['path'], _type='tcr_graph')
-        self.pmhc_graph_dataset = TCRPartialDataset(self.df['path'], _type='pmhc_graph')
+        self.tcr_graph_dataset = PartialDataset(self.df['tcr_path'], _device=device)
+        self.pmhc_graph_dataset = PartialDataset(self.df['pmhc_path'], _device=device)
 
         assert len(self.tcr_graph_dataset) == len(self.pmhc_graph_dataset)
 
         self._include_seq_data = include_seq_data
 
         if include_seq_data:
+            # TODO:
+            raise NotImplementedError
             self.cdr3a_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3a_seq_emb')
             self.cdr3b_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3b_seq_emb')
             self.epitope_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='epitope_seq_emb')
@@ -65,11 +48,14 @@ class TCRBindDataset(Dataset):
             self.cdr3b_seq_emb_dataset = None
             self.epitope_seq_emb_dataset = None
 
+    def __len__(self):
+        return len(self.df)
+
     def __getitem__(self, index):
         if torch.is_tensor(index):
             index = index.tolist()
 
-        label = torch.tensor(self.df.iloc[index]['binding'])
+        label = torch.tensor(self.df['binding'].iloc[index])
         if self._include_seq_data:
             return self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index], \
                 self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], self.epitope_seq_emb_dataset[index], \
@@ -90,6 +76,9 @@ class TCRBindDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
         self.df = pd.read_csv(tsv_path, sep='\t')
+        assert 'tcr_id' in self.df.columns
+        assert 'pmhc_id' in self.df.columns
+        assert 'binding' in self.df.columns
 
         self.dataset = None
 
@@ -102,7 +91,7 @@ class TCRBindDataModule(pl.LightningDataModule):
     def setup(self, train_size: int = 0.8, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
         train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
-                                                    low=self.hparams.low, high=self.hparams.high, random_seed=self.hparams.random_seed)
+                                                    low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
 
         self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.include_seq_data)
         self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.include_seq_data)
@@ -114,14 +103,14 @@ class TCRBindDataModule(pl.LightningDataModule):
     def collate(self, data_list):
         batch_A = Batch.from_data_list([data[0] for data in data_list])
         batch_B = Batch.from_data_list([data[1] for data in data_list])
-        batch_label = Batch.from_data_list([data[-1] for data in data_list])
+        batch_label = torch.tensor([data[-1] for data in data_list]).view(-1, 1)
         if self.hparams.include_seq_data:
-            return batch_A, batch_B, batch_label
-        else:
             batch_seq_A = Batch.from_data_list([data[2] for data in data_list])
             batch_seq_B = Batch.from_data_list([data[3] for data in data_list])
             batch_seq_C = Batch.from_data_list([data[4] for data in data_list])
             return batch_A, batch_B, batch_seq_A, batch_seq_B, batch_seq_C, batch_label
+        else:
+            return batch_A, batch_B, batch_label
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
@@ -133,3 +122,20 @@ class TCRBindDataModule(pl.LightningDataModule):
     
     def test_dataloader(self):
         return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
+
+
+if __name__=='__main__':
+    tsv = 'data/preprocessed/iedb_3d_binding.tsv'
+    dir = 'data/graphs/iedb_3d_resolved'
+    data = TCRBindDataModule(tsv_path=tsv, processed_dir=dir, batch_size=8,\
+                            low=2, high=10)
+    data.setup(train_size=0.8, random_seed=42)
+
+    train_loader = data.train_dataloader()
+    print("Train len:", len(data.train))
+    test_loader = data.test_dataloader()
+    print("Test len:",len(data.test))
+
+    for batch in train_loader:
+        print(batch)
+        break
