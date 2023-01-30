@@ -107,12 +107,14 @@ def read_pdb_to_dataframe(
     return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
 
 
-def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict):
+def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict, include_b2m=False):
     # each value of chain_key_dict is a list, can concatenate using +
     tcr_df = df.loc[df['chain_id'].isin(chain_key_dict['tra']+chain_key_dict['trb'])]
     # tcr_df = df.loc[df['chain_id'].isin(chain_key_dict['tra'])]
-
-    pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['b2m']+chain_key_dict['epitope'])]
+    if include_b2m:
+        pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['b2m']+chain_key_dict['epitope'])]
+    else:
+        pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['epitope'])]
     return tcr_df, pmhc_df
 
 
@@ -196,7 +198,11 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool
 
     return data
 
-def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, egde_dist_threshold: int = 6.):
+def bound_pdb_to_pyg(pdb_path: str, 
+                    pdb_id: str,
+                    embedding_function: Callable, 
+                    include_b2m=False,
+                    egde_dist_threshold: int = 6.):
     """ 
     reads bound TCR-pMHC files in a directory, splits them into 
     TCR and pMHC residue level graphs with node level embedings
@@ -213,7 +219,7 @@ def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, e
     :rtype: tuple(PyTorch Geometric graphs)
     """
     raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path)
-    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'])
+    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'], include_b2m=include_b2m)
     
     # TCR graph
     tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
@@ -230,7 +236,7 @@ def bound_pdb_to_pyg(pdb_path: str, pdb_id: str, embedding_function: Callable, e
     return tcr_pt, pmh_pt
 
 def process_pdb(pdb_list: List[str], pdb_dir: str = None, out_path: str = None, seq_embedding_function: Callable = None, \
-                is_bound: bool = True, save_sequence: bool = False, ignore: List[str] = list()):
+                is_bound: bool = True, save_sequence: bool = False, include_b2m: bool = False, ignore: List[str] = list()):
     """reads bound or unbound TCR-pMHC files in a directory
     if bound; splits the TCR and pMHC complexes
     then for each respective complex, computes residue level graphs with node level embedings
@@ -262,6 +268,7 @@ def process_pdb(pdb_list: List[str], pdb_dir: str = None, out_path: str = None, 
         if is_bound:
             tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=pdb_path, pdb_id=pdb_id,
                                             embedding_function=seq_embedding_function,
+                                            include_b2m = include_b2m,
                                             egde_dist_threshold=6.)
         else:
             # TODO: for unbound data 
