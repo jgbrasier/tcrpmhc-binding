@@ -136,7 +136,7 @@ checkpoint
 .DS_Store
 
 # data
-notebooks
+#notebooks
 data/pdb
 data/graphs
 data/preprocessed/tc-hard
