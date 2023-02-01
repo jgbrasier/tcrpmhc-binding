@@ -19,19 +19,19 @@ class LightningGCNN(pl.LightningModule):
     Jha, K., Saha, S. & Singh, H. Prediction of protein–protein interaction using graph neural networks. 
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
-    def __init__(self, n_output=1, num_features_pro= 1280, output_dim=128, dropout=0.2,
+    def __init__(self, n_output=1, embedding_dim= 1280, output_dim=128, dropout=0.2,
                 include_sequence: bool = False, learning_rate = 0.001, device = torch.device('cpu')):
         super().__init__()
 
         self.save_hyperparameters()
 
         # for protein 1
-        self.pro1_conv1 = GCNConv(self.hparams.num_features_pro, self.hparams.num_features_pro)
-        self.pro1_fc1 = nn.Linear(self.hparams.num_features_pro, self.hparams.output_dim)
+        self.pro1_conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
+        self.pro1_fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
 
         # for protein 2
-        self.pro2_conv1 = GCNConv(self.hparams.num_features_pro, self.hparams.num_features_pro)
-        self.pro2_fc1 = nn.Linear(self.hparams.num_features_pro, self.hparams.output_dim)
+        self.pro2_conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
+        self.pro2_fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
 
         self.relu = nn.LeakyReLU()
         self.dropout = nn.Dropout(self.hparams.dropout)
@@ -42,7 +42,7 @@ class LightningGCNN(pl.LightningModule):
         self.fc2 = nn.Linear(256 ,64)
         self.out = nn.Linear(64, self.hparams.n_output)
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.BCELoss()
         self._acc = BinaryAccuracy()
         self._precision = BinaryPrecision()
         self._recall = BinaryRecall()
@@ -103,7 +103,8 @@ class LightningGCNN(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         prot1, prot2, label = batch
         output = self(prot1, prot2)
-        loss = self.loss_fn(output, label)
+        label = label.type(torch.float)
+        loss = self.loss_fn(output, label) # output is float32 needs to match
         acc = self._acc(output, label)
         precision = self._precision(output, label)
         recall = self._recall(output, label)
@@ -136,18 +137,18 @@ class LightningGCNN(pl.LightningModule):
 
 
 class GCNN(nn.Module):
-    def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2):
+    def __init__(self, n_output=1, embedding_dim= 1024, output_dim=128, dropout=0.2):
         super(GCNN, self).__init__()
         print('GCNN Loaded')
 
         # for protein 1
         self.n_output = n_output
-        self.pro1_conv1 = GCNConv(num_features_pro, num_features_pro)
-        self.pro1_fc1 = nn.Linear(num_features_pro, output_dim)
+        self.pro1_conv1 = GCNConv(embedding_dim, embedding_dim)
+        self.pro1_fc1 = nn.Linear(embedding_dim, output_dim)
 
         # for protein 2
-        self.pro2_conv1 = GCNConv(num_features_pro, num_features_pro)
-        self.pro2_fc1 = nn.Linear(num_features_pro, output_dim)
+        self.pro2_conv1 = GCNConv(embedding_dim, embedding_dim)
+        self.pro2_fc1 = nn.Linear(embedding_dim, output_dim)
 
         self.relu = nn.LeakyReLU()
         self.dropout = nn.Dropout(dropout)
@@ -201,7 +202,7 @@ class GCNN(nn.Module):
 """# GAT"""
 
 class AttGNN(nn.Module):
-    def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2, heads = 1 ):
+    def __init__(self, n_output=1, embedding_dim= 1024, output_dim=128, dropout=0.2, heads = 1 ):
         super(AttGNN, self).__init__()
 
         print('AttGNN Loaded')
@@ -210,11 +211,11 @@ class AttGNN(nn.Module):
         self.heads = 1
         
         # for protein 1
-        self.pro1_conv1 = GATConv(num_features_pro, self.hidden* 16, heads=self.heads, dropout=0.2)
+        self.pro1_conv1 = GATConv(embedding_dim, self.hidden* 16, heads=self.heads, dropout=0.2)
         self.pro1_fc1 = nn.Linear(128, output_dim)
 
         # for protein 2
-        self.pro2_conv1 = GATConv(num_features_pro, self.hidden*16, heads=self.heads, dropout=0.2)
+        self.pro2_conv1 = GATConv(embedding_dim, self.hidden*16, heads=self.heads, dropout=0.2)
         self.pro2_fc1 = nn.Linear(128, output_dim)
 
         self.relu = nn.LeakyReLU()

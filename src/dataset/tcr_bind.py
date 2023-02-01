@@ -76,6 +76,7 @@ class TCRBindDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
         self.df = pd.read_csv(tsv_path, sep='\t')
+        # self.df = self.df[self.df['binding']==1].copy()
         assert 'tcr_id' in self.df.columns
         assert 'pmhc_id' in self.df.columns
         assert 'binding' in self.df.columns
@@ -94,7 +95,10 @@ class TCRBindDataModule(pl.LightningDataModule):
                                                     low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
 
         self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.include_seq_data)
-        self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.include_seq_data)
+        if train_size == 1:
+            self.test = None
+        else:
+            self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.include_seq_data)
 
         return self.selected_targets
 

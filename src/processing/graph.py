@@ -61,6 +61,7 @@ def read_pdb_to_dataframe(
     pdb_code: Optional[str] = None,
     uniprot_id: Optional[str] = None,
     model_index: int = 1,
+    parse_header: bool = True,
     ) -> pd.DataFrame:
     """
     Reads PDB file to ``PandasPDB`` object.
@@ -91,8 +92,11 @@ def read_pdb_to_dataframe(
 
     if pdb_path is not None:
         atomic_df = PandasPdb().read_pdb(pdb_path)
-        header = parsePDBHeader(pdb_path)
-        header['chain_key_dict'] = find_chain_names(header)
+        if parse_header:
+            header = parsePDBHeader(pdb_path)
+            header['chain_key_dict'] = find_chain_names(header)
+        else:
+            header = None
     elif uniprot_id is not None:
         atomic_df = PandasPdb().fetch_pdb(
             uniprot_id=uniprot_id, source="alphafold2-v2"
