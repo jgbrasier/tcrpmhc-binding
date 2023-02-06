@@ -268,14 +268,14 @@ def bound_pdb_to_pyg(pdb_path: str,
     return tcr_pt, pmh_pt
 
 def process_pdb(pdb_list: List[str], pdb_dir: str = None, out_path: str = None, seq_embedding_function: Callable = None, \
-                is_bound: bool = True, save_sequence: bool = False, include_b2m: bool = False, ignore: List[str] = list()):
+                is_bound: bool = True, df_processing_function: Callable = None, save_sequence: bool = False, include_b2m: bool = False, ignore: List[str] = list()):
     """reads bound or unbound TCR-pMHC files in a directory
     if bound; splits the TCR and pMHC complexes
     then for each respective complex, computes residue level graphs with node level embedings
     then saves these graphs as well as the corresponding stack of cdr3a, cdr3b and epitope embeddings.
     A unique subdirectory is created for each TCR-pMHC complex
 
-    :param pdb_list: list of pdb ids to process
+    :param pdb_list: list of pdb ids to processx
     :type pdb_list: List[str]
     :param pdb_dir: directory where pdb files live, defaults to None
     :type pdb_dir: str, optional
@@ -300,6 +300,7 @@ def process_pdb(pdb_list: List[str], pdb_dir: str = None, out_path: str = None, 
         if is_bound:
             tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=pdb_path, pdb_id=pdb_id,
                                             embedding_function=seq_embedding_function,
+                                            df_processing_function=df_processing_function,
                                             include_b2m = include_b2m,
                                             egde_dist_threshold=6.)
         else:

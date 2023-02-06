@@ -77,8 +77,10 @@ class TCRBindDataModule(pl.LightningDataModule):
 
         self.df = pd.read_csv(tsv_path, sep='\t')
         # self.df = self.df[self.df['binding']==1].copy()
-        assert 'tcr_id' in self.df.columns
-        assert 'pmhc_id' in self.df.columns
+        if 'tcr_id' not in self.df.columns or 'pmhc_id' not in self.df.columns:
+            id_ = 'uuid' if 'uuid' in self.df.columns else 'id'
+            self.df['tcr_id'] = self.df[id_].copy()
+            self.df['pmhc_id'] = self.df[id_].copy()
         assert 'binding' in self.df.columns
 
         self.dataset = None
