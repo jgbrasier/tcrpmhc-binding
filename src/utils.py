@@ -32,10 +32,14 @@ class PartialDataset(Dataset):
         # data.edge_index = data.edge_index.type(torch.int64)
         return data
 
+AA_3to1 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU':'E', 'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN':'Q', 'ARG':'R', 'SER': 'S','THR': 'T', 'VAL': 'V', 'TRP':'W', 'TYR': 'Y'}
+AA_1to3 = {v: k for k, v in AA_3to1.items()}
+
 
 def mkdir(outdir):
     if not os.path.exists(outdir):
         os.makedirs(outdir)
+
 
 def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len):
     '''

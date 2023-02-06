@@ -27,6 +27,8 @@ from graphein.protein.features.sequence.utils import (
     subset_by_node_feature_value,
 )
 
+from src.utils import AA_3to1
+
 
 def find_chain_names(header: dict):
     flag_dict = {
@@ -110,8 +112,29 @@ def read_pdb_to_dataframe(
 
     return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
 
+def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq):
+    d = []
+    out = []
+    for res in df.groupby('residue_number'):
+        aa = AA_3to1[res[1]['residue_name'].drop_duplicates().values[0]]
+        d.append((aa, res[1]['residue_name'].index.tolist()))
 
-def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict, include_b2m=False):
+    for seq in chain_seq:
+        slice = []
+        z = list(zip(seq, d)).copy()
+        assert [x[0] for x in z] == [x[1][0] for x in z]
+        for i, x in enumerate(z):
+            slice += x[1][1]
+            del(d[0])
+        out.append(df.iloc[slice])
+    # from finetuned AF2 model: sequence are in order: pmhc, epitope, tra, trb
+    # TODO: make this more generalizable
+    pmhc_df = pd.concat((out[0], out[1]))
+    tcr_df = pd.concat((out[2], out[3]))
+    return tcr_df, pmhc_df
+
+
+def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m=False):
     # each value of chain_key_dict is a list, can concatenate using +
     tcr_df = df.loc[df['chain_id'].isin(chain_key_dict['tra']+chain_key_dict['trb'])]
     # tcr_df = df.loc[df['chain_id'].isin(chain_key_dict['tra'])]
@@ -204,7 +227,8 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool
 
 def bound_pdb_to_pyg(pdb_path: str, 
                     pdb_id: str,
-                    embedding_function: Callable, 
+                    df_processing_function: Callable = None,
+                    embedding_function: Callable = None, 
                     include_b2m=False,
                     egde_dist_threshold: int = 6.):
     """ 
@@ -222,8 +246,12 @@ def bound_pdb_to_pyg(pdb_path: str,
     :return: TCR and pMHC residue level graphs
     :rtype: tuple(PyTorch Geometric graphs)
     """
-    raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path)
-    tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'], include_b2m=include_b2m)
+    parse_header = False if df_processing_function else True
+    raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path, parse_header=parse_header)
+    if not parse_header:
+        tcr_raw_df, pmhc_raw_df = df_processing_function(raw_df)
+    else:
+        tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'], include_b2m=include_b2m)
     
     # TCR graph
     tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
