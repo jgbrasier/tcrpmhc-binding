@@ -18,7 +18,7 @@ from src.utils import PartialDataset
 
 
 class TCRBindDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, data_dir: str, include_seq_data: bool = False, device=torch.device('cpu')): 
+    def __init__(self, df: pd.DataFrame, data_dir: str, label_column: str ='binder', include_seq_data: bool = False, device=torch.device('cpu')): 
 
         # load data
         self.df = df
@@ -26,6 +26,7 @@ class TCRBindDataset(Dataset):
         self.df['tcr_path'] = [os.path.join(self.data_dir, str(id)+'_tcr.pt') for id in self.df['tcr_id']]
         self.df['pmhc_path'] = [os.path.join(self.data_dir, str(id)+'_pmhc.pt') for id in self.df['pmhc_id']]
 
+        self._label_column = label_column
 
         self.tcr_graph_dataset = PartialDataset(self.df['tcr_path'], _device=device)
         self.pmhc_graph_dataset = PartialDataset(self.df['pmhc_path'], _device=device)
@@ -55,7 +56,7 @@ class TCRBindDataset(Dataset):
         if torch.is_tensor(index):
             index = index.tolist()
 
-        label = torch.tensor(self.df['binding'].iloc[index])
+        label = torch.tensor(self.df[self._label_column].iloc[index])
         if self._include_seq_data:
             return self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index], \
                 self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], self.epitope_seq_emb_dataset[index], \
@@ -69,7 +70,7 @@ class TCRBindDataModule(pl.LightningDataModule):
     Jha, K., Saha, S. & Singh, H. Prediction of protein–protein interaction using graph neural networks. 
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
-    def __init__(self, tsv_path: str = None, processed_dir: str = None, 
+    def __init__(self, tsv_path: str = None, processed_dir: str = None, y_col='binder',
                 target='epitope', low: int = 50, high: int = 800, include_seq_data: bool=False,
                 batch_size: int = 32, num_workers: int = 0, device=torch.device('cpu')):
         super().__init__()
@@ -81,7 +82,6 @@ class TCRBindDataModule(pl.LightningDataModule):
             id_ = 'uuid' if 'uuid' in self.df.columns else 'id'
             self.df['tcr_id'] = self.df[id_].copy()
             self.df['pmhc_id'] = self.df[id_].copy()
-        assert 'binding' in self.df.columns
 
         self.dataset = None
 
@@ -96,11 +96,11 @@ class TCRBindDataModule(pl.LightningDataModule):
         train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
                                                     low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
 
-        self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.include_seq_data)
+        self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
         if train_size == 1:
             self.test = None
         else:
-            self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.include_seq_data)
+            self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
 
         return self.selected_targets
 
