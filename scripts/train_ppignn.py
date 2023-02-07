@@ -16,13 +16,13 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from src.dataset import PPIDataModule
 from src.models import LightningGCNN
 
-npy_file =  'data/preprocessed/human_data.npy'
-processed_dir =  'data/graphs/pan_human'
+npy_file =  'data/preprocessed/pan_human_data.npy'
+processed_dir =  'data/graphs/pan_human_new'
 BATCH_SIZE = 8
 SEED = 20
 EPOCHS = 50
 ppi_data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
-ppi_data.setup(train_size=0.8, random_seed=SEED)
+ppi_data.setup(train_size=0.85, random_seed=SEED)
 
 train_loader = ppi_data.train_dataloader()
 print("Train len:", len(ppi_data.train))

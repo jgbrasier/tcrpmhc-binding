@@ -27,10 +27,12 @@ class LightningGCNN(pl.LightningModule):
 
         # for protein 1
         self.pro1_conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
+        self.pro1_conv2 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
         self.pro1_fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
 
         # for protein 2
         self.pro2_conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
+        self.pro2_conv2 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
         self.pro2_fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
 
         self.relu = nn.LeakyReLU()
@@ -56,8 +58,10 @@ class LightningGCNN(pl.LightningModule):
         pro2_x, pro2_edge_index, pro2_batch = pro2_data.x.type(torch.float), pro2_data.edge_index.type(torch.int64), pro2_data.batch
 
         x = self.pro1_conv1(pro1_x, pro1_edge_index)
-        x = self.relu(x)
-        
+        x = self.relu(x)    
+        # x = self.pro1_conv2(pro1_x, pro1_edge_index)
+        # x = self.relu(x)
+
 	    # global pooling
         x = global_mean_pool(x, pro1_batch)   
 
@@ -67,6 +71,8 @@ class LightningGCNN(pl.LightningModule):
 
         xt = self.pro2_conv1(pro2_x, pro2_edge_index)
         xt = self.relu(xt)
+        # xt = self.pro2_conv2(pro2_x, pro2_edge_index)
+        # xt = self.relu(xt)
 
 	    # global pooling
         xt = global_mean_pool(xt, pro2_batch)  
@@ -173,7 +179,7 @@ class GCNN(nn.Module):
 
         # flatten
         x = self.relu(self.pro1_fc1(x))
-        x = self.dropout(x)
+        # x = self.dropout(x)
 
         xt = self.pro2_conv1(pro2_x, pro2_edge_index)
         xt = self.relu(xt)
@@ -183,7 +189,7 @@ class GCNN(nn.Module):
 
         # flatten
         xt = self.relu(self.pro2_fc1(xt))
-        xt = self.dropout(xt)
+        # xt = self.dropout(xt)
 
 	    # Concatenation  
         xc = torch.cat((x, xt), 1)
@@ -191,10 +197,10 @@ class GCNN(nn.Module):
         # add some dense layers
         xc = self.fc1(xc)
         xc = self.relu(xc)
-        xc = self.dropout(xc)
+        # xc = self.dropout(xc)
         xc = self.fc2(xc)
         xc = self.relu(xc)
-        xc = self.dropout(xc)
+        # xc = self.dropout(xc)
         out = self.out(xc)
         out = self.sigmoid(out)
         return out
@@ -208,7 +214,7 @@ class AttGNN(nn.Module):
         print('AttGNN Loaded')
 
         self.hidden = 8
-        self.heads = 1
+        self.heads = heads
         
         # for protein 1
         self.pro1_conv1 = GATConv(embedding_dim, self.hidden* 16, heads=self.heads, dropout=0.2)

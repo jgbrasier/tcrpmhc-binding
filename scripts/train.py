@@ -4,42 +4,51 @@ import pandas as pd
 import numpy as np
 import time
 
-from src.dataset import TCRSeqDataset
-from src.models import NetTCR
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torch.optim import Optimizer, Adam
 
-train_file = "data/sample_train.csv"
-test_file = "data/sample_test.csv"
-
-peptide_len, cdra_len, cdrb_len = 9, 30, 30
 
 # DEVICE = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 DEVICE = torch.device('cpu')
 print("Using:", DEVICE)
 
-train_dataset = TCRSeqDataset(file = train_file, device=DEVICE)
-train_size = int(len(train_dataset)*0.8)
-val_size = len(train_dataset) - train_size
-train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-test_dataset = TCRSeqDataset(file = test_file, test=True, device=DEVICE)
 
-BATCH_SIZE = 16
-LEARNING_RATE = 0.001
-EPOCHS = 10
+from src.dataset import TCRBindDataModule, PPIDataModule
+from src.models.ppi_gnn import LightningGCNN, GCNN, AttGNN
 
-train_dataloader = DataLoader(train_dataset, batch_size = BATCH_SIZE)
-val_dataloader = DataLoader(val_dataset, batch_size=len(val_dataset))
-test_dataloader = DataLoader(test_dataset, batch_size=len(test_dataset))
+tsv = 'data/preprocessed/run329_results.tsv'
+dir = 'data/graphs/run329_results'
+ckpt = 'checkpoint/run329-data/ppi_gnn/epoch=0-step=628-v1.ckpt'
+run_name = 'run329-data'
 
-model = NetTCR(peptide_len=peptide_len, cdra_len=cdra_len, cdrb_len=cdrb_len, device=DEVICE)
+BATCH_SIZE = 4
+SEED = 42
+EPOCHS = 100
+
+
+data = TCRBindDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
+                        y_col='binder', target='peptide', low=50, high=700)
+
+# npy_file =  'data/preprocessed/pan_human_data.npy'
+# processed_dir =  'data/graphs/pan_human_new'
+# data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
+
+data.setup(train_size=0.85, random_seed=SEED)
+
+
+train_loader = data.train_dataloader()
+print("Train len:", len(data.train))
+test_loader = data.test_dataloader()
+print("Test len:",len(data.test))
+
+
+model = AttGNN(embedding_dim=1280)
 criterion = nn.BCELoss()
-optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+optimizer = Adam(model.parameters(), lr=0.001)
 
 def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
     last_loss = 0.0
@@ -49,15 +58,15 @@ def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_f
 
     for i, batch in enumerate(train_dataloader):
         # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = batch
+        prot1, prot2, labels = batch
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # a = list(model.parameters())[0].clone()
 
         # forward + backward + optimize
-        outputs = model(inputs)
-        labels = torch.unsqueeze(labels, dim=1)
+        outputs = model(prot1, prot2)
+        labels = labels.type(torch.float)
         # print(outputs)
         loss = loss_fn(outputs, labels)
         loss.backward()
@@ -86,14 +95,15 @@ def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLo
         avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
         t2 = time.time()
 
-        print(t2-t1)
+        print(f'epoch {epoch} time: {t2-t1}')
         model.train(False)
 
         running_vloss = 0.0
         for i, vdata in enumerate(val_dataloader):
-            vinputs, vlabels = vdata
-            voutputs = model(vinputs)
-            voutputs = torch.squeeze(voutputs)
+            vprot1, vprot2, vlabels = vdata
+            voutputs = model(vprot1, vprot2)
+            # print(voutputs, vlabels)
+            vlabels = vlabels.type(torch.float)
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
 
@@ -104,5 +114,5 @@ def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLo
 
     return history
 
-history = train(model, train_dataloader, val_dataloader, EPOCHS, criterion, optimizer)
+history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
 
