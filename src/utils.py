@@ -32,6 +32,28 @@ class PartialDataset(Dataset):
         # data.edge_index = data.edge_index.type(torch.int64)
         return data
 
+class GraphDataset(Dataset):
+    def __init__(self, df: pd.DataFrame, data_dir: str, id_column: str = 'id', label_column: str ='binder', device=torch.device('cpu')): 
+
+        # load data
+        self.df = df
+        self.data_dir = data_dir
+        self.df['path'] = [os.path.join(self.data_dir, str(id)+'.pt') for id in self.df[id_column]]
+
+        self._device = device
+        self._label_column = label_column
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+
+        data = torch.load(self.df['path'][index], map_location=self._device)
+        label = torch.tensor(self.df[self._label_column].iloc[index], map_location=self._device)
+        return data, label
+
 AA_3to1 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU':'E', 'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN':'Q', 'ARG':'R', 'SER': 'S','THR': 'T', 'VAL': 'V', 'TRP':'W', 'TYR': 'Y'}
 AA_1to3 = {v: k for k, v in AA_3to1.items()}
 
