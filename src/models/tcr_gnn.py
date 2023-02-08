@@ -56,23 +56,23 @@ class GCN(nn.Module):
         return out
 
 class LightningGCN(pl.LightningModule):
-    def __init__(self, n_output=1, embedding_dim = 1280, output_dim=128, dropout=0.2):
+    def __init__(self, n_output=1, embedding_dim = 1280, output_dim=128, dropout=0.2, \
+                learning_rate = 0.001,):
         super().__init__()
         self.save_hyperparameters()
 
         # for protein 1
-        self.n_output = n_output
-        self.conv1 = GCNConv(embedding_dim, embedding_dim)
-        self.fc1 = nn.Linear(embedding_dim, output_dim)
+        self.conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
+        self.fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
 
 
         self.relu = nn.LeakyReLU()
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(self.hparams.dropout)
         self.sigmoid = nn.Sigmoid()
 
         # combined layers
-        self.fc2 = nn.Linear(output_dim ,output_dim//2)
-        self.out = nn.Linear(output_dim//2, self.n_output)
+        self.fc2 = nn.Linear(self.hparams.output_dim ,self.hparams.output_dim//2)
+        self.out = nn.Linear(self.hparams.output_dim//2, self.hparams.n_output)
 
         # metrics
         self.loss_fn = nn.BCELoss()

@@ -129,52 +129,6 @@ class TCRBindDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
 
-class TCRBindDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, data_dir: str, label_column: str ='binder', include_seq_data: bool = False, device=torch.device('cpu')): 
-
-        # load data
-        self.df = df
-        self.data_dir = data_dir
-        self.df['tcr_path'] = [os.path.join(self.data_dir, str(id)+'_tcr.pt') for id in self.df['tcr_id']]
-        self.df['pmhc_path'] = [os.path.join(self.data_dir, str(id)+'_pmhc.pt') for id in self.df['pmhc_id']]
-
-        self._label_column = label_column
-
-        self.tcr_graph_dataset = PartialDataset(self.df['tcr_path'], _device=device)
-        self.pmhc_graph_dataset = PartialDataset(self.df['pmhc_path'], _device=device)
-
-        assert len(self.tcr_graph_dataset) == len(self.pmhc_graph_dataset)
-
-        self._include_seq_data = include_seq_data
-
-        if include_seq_data:
-            # TODO:
-            raise NotImplementedError
-            self.cdr3a_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3a_seq_emb')
-            self.cdr3b_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='cdr3b_seq_emb')
-            self.epitope_seq_emb_dataset = TCRPartialDataset(self.df['path'], _type='epitope_seq_emb')
-            assert len(self.cdr3a_seq_emb_dataset) == len(self.cdr3b_seq_emb_dataset) \
-            and len(self.cdr3b_seq_emb_dataset) == len(self.epitope_seq_emb_dataset)
-            assert len(self.cdr3a_seq_emb_dataset) == len(self.tcr_graph_dataset)
-        else:
-            self.cdr3a_seq_emb_dataset = None
-            self.cdr3b_seq_emb_dataset = None
-            self.epitope_seq_emb_dataset = None
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, index):
-        if torch.is_tensor(index):
-            index = index.tolist()
-
-        label = torch.tensor(self.df[self._label_column].iloc[index])
-        if self._include_seq_data:
-            return self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index], \
-                self.cdr3a_seq_emb_dataset[index], self.cdr3b_seq_emb_dataset[index], self.epitope_seq_emb_dataset[index], \
-                    label
-        else:
-            return self.tcr_graph_dataset[index], self.pmhc_graph_dataset[index], label
 
 class TCRpMHCDataModule(pl.LightningDataModule):
     """
@@ -186,6 +140,7 @@ class TCRpMHCDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
         self.df = pd.read_csv(tsv_path, sep='\t')
+        self.df = pd.concat((self.df[self.df[y_col]==0], self.df[self.df[y_col]==1].sample(frac=0.2, random_state=1)))
 
         self.train: GraphDataset = None
         self.val: GraphDataset = None

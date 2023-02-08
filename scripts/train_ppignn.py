@@ -30,7 +30,7 @@ test_loader = ppi_data.test_dataloader()
 print("Test len:",len(ppi_data.test))
 
 
-ppigcnn = LightningGCNN(num_features_pro=1280) # ESM embedding dim: 1280
+ppigcnn = LightningGCNN(embedding_dim=1280) # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint','pan-human-data', 'ppi_gnn'), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs','pan-human-data'), name='ppi_gnn')
 trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], log_every_n_steps=10, check_val_every_n_epoch=1)
