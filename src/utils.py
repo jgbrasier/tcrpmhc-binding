@@ -51,7 +51,7 @@ class GraphDataset(Dataset):
             index = index.tolist()
 
         data = torch.load(self.df['path'][index], map_location=self._device)
-        label = torch.tensor(self.df[self._label_column].iloc[index], map_location=self._device)
+        label = torch.tensor(self.df[self._label_column].iloc[index], device=self._device)
         return data, label
 
 AA_3to1 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU':'E', 'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN':'Q', 'ARG':'R', 'SER': 'S','THR': 'T', 'VAL': 'V', 'TRP':'W', 'TYR': 'Y'}

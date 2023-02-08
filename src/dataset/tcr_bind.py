@@ -180,49 +180,36 @@ class TCRpMHCDataModule(pl.LightningDataModule):
     """
     Single tcr-mhc data loader module
     """
-    def __init__(self, tsv_path: str = None, processed_dir: str = None, y_col='binder',
-                target='epitope', low: int = 50, high: int = 800, include_seq_data: bool=False,
+    def __init__(self, tsv_path: str = None, processed_dir: str = None, id_col: str ='uuid', y_col='binder', \
                 batch_size: int = 32, num_workers: int = 0, device=torch.device('cpu')):
         super().__init__()
         self.save_hyperparameters()
 
         self.df = pd.read_csv(tsv_path, sep='\t')
-        self._id = 'uuid' if 'uuid' in self.df.columns else 'id'
 
-        self.dataset = None
-
-        self.train: TCRBindDataset = None
-        self.val: TCRBindDataset = None
-        self.test: TCRBindDataset = None
+        self.train: GraphDataset = None
+        self.val: GraphDataset = None
+        self.test: GraphDataset = None
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, random_seed: int = 42):
+    def setup(self, train_size: int = 0.8, target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
-        train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
-                                                    low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
+        train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
+                                                    low=low, high=high, random_seed=random_seed)
 
-        self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
+        self.train = GraphDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col, device=self.hparams.device)
         if train_size == 1:
             self.test = None
         else:
-            self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
-
+            self.test = GraphDataset(test_df, self.hparams.processed_dir, self.hparams.id_col,self.hparams.y_col, device=self.hparams.device)
         return self.selected_targets
 
-    # custom collate for paired dataset 
-    # see: https://github.com/pyg-team/pytorch_geometric/issues/781
+    # custom collate see: https://github.com/pyg-team/pytorch_geometric/issues/781
     def collate(self, data_list):
         batch_A = Batch.from_data_list([data[0] for data in data_list])
-        batch_B = Batch.from_data_list([data[1] for data in data_list])
         batch_label = torch.tensor([data[-1] for data in data_list]).view(-1, 1)
-        if self.hparams.include_seq_data:
-            batch_seq_A = Batch.from_data_list([data[2] for data in data_list])
-            batch_seq_B = Batch.from_data_list([data[3] for data in data_list])
-            batch_seq_C = Batch.from_data_list([data[4] for data in data_list])
-            return batch_A, batch_B, batch_seq_A, batch_seq_B, batch_seq_C, batch_label
-        else:
-            return batch_A, batch_B, batch_label
+        return batch_A, batch_label
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore

@@ -9,7 +9,16 @@ import torch
 
 from tqdm import tqdm
 
-from graphein.protein.graphs import construct_graph
+from graphein.protein.graphs import ProteinGraphConfig, construct_graph
+from graphein.protein.edges.distance import (add_distance_threshold,
+                                             add_peptide_bonds,
+                                             add_hydrogen_bond_interactions,
+                                             add_disulfide_interactions,
+                                             add_ionic_interactions,
+                                             add_aromatic_interactions,
+                                             add_aromatic_sulphur_interactions,
+                                             add_cation_pi_interactions
+                                            )
 from graphein.protein.features.sequence.embeddings import esm_residue_embedding, compute_esm_embedding
 from graphein.protein.visualisation import plotly_protein_structure_graph
 from src.processing.graph import (convert_nx_to_pyg_data, 
@@ -23,7 +32,7 @@ from src.processing.graph import (convert_nx_to_pyg_data,
 
 tsv_path = 'data/preprocessed/run329_results.tsv'
 pdb_dir = 'data/pdb/run329_results_for_jg'
-out_dir = 'data/graphs/run329_results'
+out_dir = 'data/graphs/run329_results_bound'
 
 df = pd.read_csv(tsv_path, sep='\t')
 
@@ -31,19 +40,40 @@ encoder = partial(compute_esm_embedding, representation='residue', model_name = 
 
 
 if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
+    os.makedirs(out_dir)\
 
+### ----------------------------------------------------------------------------------
+### seperate --> unbind tcr and pmhc structures
+# for i in tqdm(df.index):
+#     pdb_id = str(df.iloc[i]['uuid'])
+#     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
+#     chain_seq = str(df.iloc[i]['chainseq']).split('/')
+#     # make dir
+#     tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=pdb_path, pdb_id=pdb_id,
+#                                     embedding_function=encoder,
+#                                     df_processing_function=partial(split_af2_tcrpmhc_df, chain_seq=chain_seq),
+#                                     egde_dist_threshold=6.)
+#     # save graphs
+#     torch.save(tcr_pt, os.path.join(out_dir, f"{pdb_id}_tcr.pt"))
+#     torch.save(pmhc_pt, os.path.join(out_dir, f"{pdb_id}_pmhc.pt"))
+#     # we do not need to save the label as it is stored in self.data
+
+
+### ----------------------------------------------------------------------------------
+### keep them together
 for i in tqdm(df.index):
     pdb_id = str(df.iloc[i]['uuid'])
     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
-    chain_seq = str(df.iloc[i]['chainseq']).split('/')
-    # make dir
-    tcr_pt, pmhc_pt = bound_pdb_to_pyg(pdb_path=pdb_path, pdb_id=pdb_id,
-                                    embedding_function=encoder,
-                                    df_processing_function=partial(split_af2_tcrpmhc_df, chain_seq=chain_seq),
-                                    egde_dist_threshold=6.)
+    params = {
+            "granularity": 'CA',
+            'verbose': False,
+            'exclude_waters': True,
+            'deprotonate': True,
+            "edge_construction_functions": [partial(add_distance_threshold, long_interaction_threshold=1, threshold=6.0)],
+            'graph_metadata_functions': [partial(esm_residue_embedding, model_name="esm1b_t33_650M_UR50S", output_layer=33)],
+        }
+    config = ProteinGraphConfig(**params)
+    g = construct_graph(config=config, pdb_path=pdb_path)
+    pt = convert_nx_to_pyg_data(g, node_feat_name='esm_embedding')
     # save graphs
-    torch.save(tcr_pt, os.path.join(out_dir, f"{pdb_id}_tcr.pt"))
-    torch.save(pmhc_pt, os.path.join(out_dir, f"{pdb_id}_pmhc.pt"))
-
-        # we do not need to save the label as it is stored in self.data
+    torch.save(pt, os.path.join(out_dir, f"{pdb_id}.pt"))

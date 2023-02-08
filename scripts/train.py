@@ -17,27 +17,28 @@ print("Using:", DEVICE)
 
 
 
-from src.dataset import TCRBindDataModule, PPIDataModule
+from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
 from src.models.ppi_gnn import LightningGCNN, GCNN, AttGNN
+from src.models.tcr_gnn import GCN
 
 tsv = 'data/preprocessed/run329_results.tsv'
-dir = 'data/graphs/run329_results'
+dir = 'data/graphs/run329_results_bound'
 ckpt = 'checkpoint/run329-data/ppi_gnn/epoch=0-step=628-v1.ckpt'
-run_name = 'run329-data'
+run_name = 'run329-bound-data'
 
 BATCH_SIZE = 4
 SEED = 42
 EPOCHS = 100
 
 
-data = TCRBindDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
-                        y_col='binder', target='peptide', low=50, high=700)
+data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
+                        id_col='uuid', y_col='binder')
 
 # npy_file =  'data/preprocessed/pan_human_data.npy'
 # processed_dir =  'data/graphs/pan_human_new'
 # data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
 
-data.setup(train_size=0.85, random_seed=SEED)
+data.setup(train_size=0.85, target='peptide', low=50, high=700, random_seed=SEED)
 
 
 train_loader = data.train_dataloader()
@@ -45,8 +46,7 @@ print("Train len:", len(data.train))
 test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
-
-model = AttGNN(embedding_dim=1280)
+model = GCN(embedding_dim=1280)
 criterion = nn.BCELoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
@@ -58,14 +58,15 @@ def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_f
 
     for i, batch in enumerate(train_dataloader):
         # get the inputs; data is a list of [inputs, labels]
-        prot1, prot2, labels = batch
+        # prot1, prot2, labels = batch
+        prot, labels = batch
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # a = list(model.parameters())[0].clone()
 
         # forward + backward + optimize
-        outputs = model(prot1, prot2)
+        outputs = model(prot)
         labels = labels.type(torch.float)
         # print(outputs)
         loss = loss_fn(outputs, labels)
@@ -100,8 +101,11 @@ def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLo
 
         running_vloss = 0.0
         for i, vdata in enumerate(val_dataloader):
-            vprot1, vprot2, vlabels = vdata
-            voutputs = model(vprot1, vprot2)
+            # vprot1, vprot2, vlabels = vdata
+            # voutputs = model(vprot1, vprot2)
+            vprot, vlabels = vdata
+            voutputs = model(vprot)
+
             # print(voutputs, vlabels)
             vlabels = vlabels.type(torch.float)
             vloss = loss_fn(voutputs, vlabels)
