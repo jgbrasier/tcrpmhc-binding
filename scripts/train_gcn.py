@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-sys.path.insert(0, os.path.abspath(os.path.join('..')))
+# sys.path.insert(0, os.path.abspath(os.path.join('..')))
 
 from src.dataset import TCRBindDataModule, TCRpMHCDataModule
 from src.models import LightningGCNN, LightningGCN

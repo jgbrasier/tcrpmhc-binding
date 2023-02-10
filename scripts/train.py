@@ -10,11 +10,9 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torch.optim import Optimizer, Adam
 
-
 # DEVICE = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 DEVICE = torch.device('cpu')
 print("Using:", DEVICE)
-
 
 
 from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
@@ -106,7 +104,7 @@ def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLo
             vprot, vlabels = vdata
             voutputs = model(vprot)
 
-            # print(voutputs, vlabels)
+            print(voutputs, vlabels)
             vlabels = vlabels.type(torch.float)
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
