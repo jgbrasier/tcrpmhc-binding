@@ -5,28 +5,43 @@ import numpy as np
 from src.utils import hard_split_df
 
 import torch
+import torch.nn as nn
+from torch.nn.functional import threshold, normalize, pad
 from torch.utils.data import Dataset, DataLoader
+from torchvision.transforms.functional import to_tensor
 import pytorch_lightning as pl
 
 class ImageClassificationDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, dist_mat_dir: str, id_col: str ='uuid', y_col: str ='binder',):
+    def __init__(self, df: pd.DataFrame, dist_mat_dir: str, id_col: str ='uuid', y_col: str ='binder'):
         self.dist_mat_dir = dist_mat_dir
         self.df = df
 
         self._id_col = id_col
         self._y_col = y_col
 
+        self._max_width = 427
+        self._max_height = 427
+        self._dist_thresh = 10
+
     def __len__(self):
-        return len(self.labels_df)
+        return len(self.df)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        pdb_id = str(self.labels_df.iloc[idx][self._id_col])
+        pdb_id = str(self.df.iloc[idx][self._id_col])
         img_path = os.path.join(self.dist_mat_dir, pdb_id+'.npy')
-        image = torch.from_numpy(np.load(img_path))
-        label = self.df.iloc[idx][self._y_col]
-        return (image, label)
+        img = np.load(img_path)
+
+        # transform image
+        # TODO: contact map 6A threshold
+        img[img>self._dist_thresh] = 0
+        img = to_tensor(img)
+        img = pad(img, [0, self._max_width - img.shape[-1], 0, self._max_height - img.shape[-2]], "constant", 0)
+        img = normalize(img, p=1).float()
+
+        label = torch.tensor(self.df.iloc[idx][self._y_col])
+        return (img, label)
 
 class ImageClassificationDataModule(pl.LightningDataModule):
     """
@@ -50,11 +65,11 @@ class ImageClassificationDataModule(pl.LightningDataModule):
         train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
                                                     low=low, high=high, random_seed=random_seed)
 
-        self.train = ImageClassificationDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col, device=self.hparams.device)
+        self.train = ImageClassificationDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
         if train_size == 1:
             self.test = None
         else:
-            self.test = ImageClassificationDataset(test_df, self.hparams.processed_dir, self.hparams.id_col,self.hparams.y_col, device=self.hparams.device)
+            self.test = ImageClassificationDataset(test_df, self.hparams.processed_dir, self.hparams.id_col,self.hparams.y_col)
         return self.selected_targets
 
     def train_dataloader(self):
