@@ -44,85 +44,85 @@ print("Train len:", len(data.train))
 test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
-i = 0
-for batch in train_loader:
-    _, label, name = batch
-    i += 1
-    print(name, label)
-    if i > 100:
-        break
+# i = 0
+# for batch in train_loader:
+#     _, label, name = batch
+#     i += 1
+#     print(name, label)
+#     if i > 100:
+#         break
 
-# model = GCN(embedding_dim=1280)
-# criterion = nn.BCELoss()
-# optimizer = Adam(model.parameters(), lr=0.001)
+model = GCN(embedding_dim=1280)
+criterion = nn.BCELoss()
+optimizer = Adam(model.parameters(), lr=0.001)
 
-# def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
-#     last_loss = 0.0
-#     running_loss = 0.0
+def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
+    last_loss = 0.0
+    running_loss = 0.0
 
-#     print_every = 10
+    print_every = 10
 
-#     for i, batch in enumerate(train_dataloader):
-#         # get the inputs; data is a list of [inputs, labels]
-#         # prot1, prot2, labels = batch
-#         prot, labels = batch
-#         # zero the parameter gradients
-#         optimizer.zero_grad()
+    for i, batch in enumerate(train_dataloader):
+        # get the inputs; data is a list of [inputs, labels]
+        # prot1, prot2, labels = batch
+        prot, labels = batch
+        # zero the parameter gradients
+        optimizer.zero_grad()
 
-#         # a = list(model.parameters())[0].clone()
+        # a = list(model.parameters())[0].clone()
 
-#         # forward + backward + optimize
-#         outputs = model(prot)
-#         labels = labels.type(torch.float)
-#         # print(outputs)
-#         loss = loss_fn(outputs, labels)
-#         loss.backward()
-#         optimizer.step()
+        # forward + backward + optimize
+        outputs = model(prot)
+        labels = labels.type(torch.float)
+        # print(outputs)
+        loss = loss_fn(outputs, labels)
+        loss.backward()
+        optimizer.step()
 
-#         # check if weights are being updated
-#         # b = list(model.parameters())[0].clone()
-#         # print(torch.equal(a, b))
-#         # assert torch.equal(a, b)
+        # check if weights are being updated
+        # b = list(model.parameters())[0].clone()
+        # print(torch.equal(a, b))
+        # assert torch.equal(a, b)
 
-#         # print statistics
-#         running_loss += loss.item()
-#         if i % print_every == print_every-1:    # print every 100 mini-batches
-#             last_loss = running_loss / print_every
-#             running_loss = 0.0
-#     return last_loss
+        # print statistics
+        running_loss += loss.item()
+        if i % print_every == print_every-1:    # print every 100 mini-batches
+            last_loss = running_loss / print_every
+            running_loss = 0.0
+    return last_loss
 
-# def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
-#         epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
-#     history = {'train_loss': [],
-#             'val_loss': []
-#             }
-#     for epoch in range(1, epochs+1):
-#         model.train(True)
-#         t1 = time.time()
-#         avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
-#         t2 = time.time()
+def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
+        epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
+    history = {'train_loss': [],
+            'val_loss': []
+            }
+    for epoch in range(1, epochs+1):
+        model.train(True)
+        t1 = time.time()
+        avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
+        t2 = time.time()
 
-#         print(f'epoch {epoch} time: {t2-t1}')
-#         model.train(False)
+        print(f'epoch {epoch} time: {t2-t1}')
+        model.train(False)
 
-#         running_vloss = 0.0
-#         for i, vdata in enumerate(val_dataloader):
-#             # vprot1, vprot2, vlabels = vdata
-#             # voutputs = model(vprot1, vprot2)
-#             vprot, vlabels = vdata
-#             voutputs = model(vprot)
+        running_vloss = 0.0
+        for i, vdata in enumerate(val_dataloader):
+            # vprot1, vprot2, vlabels = vdata
+            # voutputs = model(vprot1, vprot2)
+            vprot, vlabels = vdata
+            voutputs = model(vprot)
 
-#             print(voutputs, vlabels)
-#             vlabels = vlabels.type(torch.float)
-#             vloss = loss_fn(voutputs, vlabels)
-#             running_vloss += vloss
+            print(voutputs, vlabels)
+            vlabels = vlabels.type(torch.float)
+            vloss = loss_fn(voutputs, vlabels)
+            running_vloss += vloss
 
-#         avg_vloss = running_vloss / (i + 1)
-#         print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
-#         history['train_loss'].append(avg_loss)
-#         history['val_loss'].append(avg_vloss)
+        avg_vloss = running_vloss / (i + 1)
+        print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
+        history['train_loss'].append(avg_loss)
+        history['val_loss'].append(avg_vloss)
 
-#     return history
+    return history
 
-# history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
+history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
 
