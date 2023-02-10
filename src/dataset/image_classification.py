@@ -14,22 +14,22 @@ import pytorch_lightning as pl
 class ImageClassificationDataset(Dataset):
     def __init__(self, df: pd.DataFrame, dist_mat_dir: str, id_col: str ='uuid', y_col: str ='binder'):
         self.dist_mat_dir = dist_mat_dir
-        self.df = df
 
-        self._id_col = id_col
-        self._y_col = y_col
+        npy_ar = np.array(df[[id_col, y_col]].values)
+        self.names = npy_ar[:, 0]
+        self.labels = npy_ar[:, 1]
 
         self._max_width = 427
         self._max_height = 427
         self._dist_thresh = 10
 
     def __len__(self):
-        return len(self.df)
+        return len(self.names)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        pdb_id = str(self.df.iloc[idx][self._id_col])
+        pdb_id = str(self.names[idx])
         img_path = os.path.join(self.dist_mat_dir, pdb_id+'.npy')
         img = np.load(img_path)
 
@@ -40,8 +40,8 @@ class ImageClassificationDataset(Dataset):
         img = pad(img, [0, self._max_width - img.shape[-1], 0, self._max_height - img.shape[-2]], "constant", 0)
         img = normalize(img, p=1).float()
 
-        label = torch.tensor(self.df.iloc[idx][self._y_col])
-        return (img, label)
+        label = torch.tensor(self.labels[idx])
+        return self.names[idx], img, label
 
 class ImageClassificationDataModule(pl.LightningDataModule):
     """

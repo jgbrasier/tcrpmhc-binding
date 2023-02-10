@@ -19,10 +19,10 @@ from src.dataset import ImageClassificationDataModule
 from src.models.tcr_cnn import ResNet, SimpleCNN
 
 tsv = 'data/preprocessed/run329_results.tsv'
-dir = 'data/dist_mat/run329_results_bound'
+dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/dist_mat/run329_results_bound'
 run_name = 'run329-bound-data'
 
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 SEED = 42
 EPOCHS = 100
 
@@ -36,84 +36,89 @@ data = ImageClassificationDataModule(tsv_path=tsv, processed_dir=dir, batch_size
 
 data.setup(train_size=0.85, target='peptide', low=50, high=700, random_seed=SEED)
 
+df = pd.read_csv(tsv, sep='\t')
 
 train_loader = data.train_dataloader()
 print("Train len:", len(data.train))
 test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
-# model = ResNet([2, 2], num_classes=1).float()
-model = SimpleCNN((1, 427, 427), 1)
-criterion = nn.BCELoss()
-optimizer = Adam(model.parameters(), lr=0.01)
+for batch in train_loader:
+    name, _, label = batch
+    print(name, label)
 
-def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
-    last_loss = 0.0
-    running_loss = 0.0
+# # model = ResNet([2, 2], num_classes=1).float()
+# model = SimpleCNN((1, 427, 427), 1)
+# criterion = nn.BCELoss()
+# optimizer = Adam(model.parameters(), lr=0.01)
 
-    print_every = 10
+# def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
+#     last_loss = 0.0
+#     running_loss = 0.0
 
-    for i, batch in enumerate(train_dataloader):
-        # get the inputs; data is a list of [inputs, labels]
-        # prot1, prot2, labels = batch
-        img, labels = batch
-        # zero the parameter gradients
-        optimizer.zero_grad()
+#     print_every = 10
 
-        # a = list(model.parameters())[0].clone()
+#     for i, batch in enumerate(train_dataloader):
+#         # get the inputs; data is a list of [inputs, labels]
+#         # prot1, prot2, labels = batch
+#         img, labels = batch
+#         # zero the parameter gradients
+#         optimizer.zero_grad()
 
-        # forward + backward + optimize
-        outputs = model(img)
-        labels = labels.float().unsqueeze(1)
-        # print(outputs)
-        loss = loss_fn(outputs, labels)
-        loss.backward()
-        optimizer.step()
+#         # a = list(model.parameters())[0].clone()
 
-        # check if weights are being updated
-        # b = list(model.parameters())[0].clone()
-        # print(torch.equal(a, b))
-        # assert torch.equal(a, b)
+#         # forward + backward + optimize
+#         outputs = model(img)
+#         labels = labels.float().unsqueeze(1)
+#         # print(outputs)
+#         loss = loss_fn(outputs, labels)
+#         loss.backward()
+#         optimizer.step()
 
-        # print statistics
-        running_loss += loss.item()
-        if i % print_every == print_every-1:    # print every 100 mini-batches
-            last_loss = running_loss / print_every
-            running_loss = 0.0
-    return last_loss
+#         # check if weights are being updated
+#         # b = list(model.parameters())[0].clone()
+#         # print(torch.equal(a, b))
+#         # assert torch.equal(a, b)
 
-def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
-        epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
-    history = {'train_loss': [],
-            'val_loss': []
-            }
-    for epoch in range(1, epochs+1):
-        model.train(True)
-        t1 = time.time()
-        avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
-        t2 = time.time()
+#         # print statistics
+#         running_loss += loss.item()
+#         if i % print_every == print_every-1:    # print every 100 mini-batches
+#             last_loss = running_loss / print_every
+#             running_loss = 0.0
+#     return last_loss
 
-        print(f'epoch {epoch} time: {t2-t1}')
-        model.train(False)
+# def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
+#         epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
+#     history = {'train_loss': [],
+#             'val_loss': []
+#             }
+#     for epoch in range(1, epochs+1):
+#         model.train(True)
+#         t1 = time.time()
+#         avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
+#         t2 = time.time()
 
-        running_vloss = 0.0
-        for i, vdata in enumerate(val_dataloader):
-            # vprot1, vprot2, vlabels = vdata
-            # voutputs = model(vprot1, vprot2)
-            vimg, vlabels = vdata
-            voutputs = model(vimg)
+#         print(f'epoch {epoch} time: {t2-t1}')
+#         model.train(False)
 
-            print(voutputs, vlabels)
-            vlabels = vlabels.float().unsqueeze(1)
-            vloss = loss_fn(voutputs, vlabels)
-            running_vloss += vloss
+#         running_vloss = 0.0
+#         for i, vdata in enumerate(val_dataloader):
+#             # vprot1, vprot2, vlabels = vdata
+#             # voutputs = model(vprot1, vprot2)
+#             vimg, vlabels = vdata
+#             voutputs = model(vimg)
 
-        avg_vloss = running_vloss / (i + 1)
-        print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
-        history['train_loss'].append(avg_loss)
-        history['val_loss'].append(avg_vloss)
+#             print(voutputs, vlabels)
+#             vlabels = vlabels.float().unsqueeze(1)
+#             vloss = loss_fn(voutputs, vlabels)
+#             running_vloss += vloss
 
-    return history
+#         avg_vloss = running_vloss / (i + 1)
+#         print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
+#         history['train_loss'].append(avg_loss)
+#         history['val_loss'].append(avg_vloss)
 
-history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
+#     return history
+
+# history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
 

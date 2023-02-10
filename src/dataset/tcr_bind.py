@@ -140,7 +140,7 @@ class TCRpMHCDataModule(pl.LightningDataModule):
         self.save_hyperparameters()
 
         self.df = pd.read_csv(tsv_path, sep='\t')
-        self.df = pd.concat((self.df[self.df[y_col]==0], self.df[self.df[y_col]==1].sample(frac=0.2, random_state=1)))
+        # self.df = pd.concat((self.df[self.df[y_col]==0], self.df[self.df[y_col]==1].sample(frac=0.2, random_state=1)))
 
         self.train: GraphDataset = None
         self.val: GraphDataset = None
@@ -163,8 +163,9 @@ class TCRpMHCDataModule(pl.LightningDataModule):
     # custom collate see: https://github.com/pyg-team/pytorch_geometric/issues/781
     def collate(self, data_list):
         batch_A = Batch.from_data_list([data[0] for data in data_list])
-        batch_label = torch.tensor([data[-1] for data in data_list]).view(-1, 1)
-        return batch_A, batch_label
+        batch_label = torch.tensor([data[1] for data in data_list]).view(-1, 1)
+        # batch_name = [data[-1] for data in data_list]
+        return batch_A, batch_label # , batch_name
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
