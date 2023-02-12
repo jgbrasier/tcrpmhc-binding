@@ -10,28 +10,24 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torch.optim import Optimizer, Adam
 
-
 # DEVICE = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
 DEVICE = torch.device('cpu')
 print("Using:", DEVICE)
 
 
-
-from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
-from src.models.ppi_gnn import LightningGCNN, GCNN, AttGNN
-from src.models.tcr_gnn import GCN
+from src.dataset import ImageClassificationDataModule
+from src.models.tcr_cnn import ResNet, SimpleCNN, ResNet50TransferLearning
 
 tsv = 'data/preprocessed/run329_results.tsv'
-dir = 'data/graphs/run329_results_bound'
-ckpt = 'checkpoint/run329-data/ppi_gnn/epoch=0-step=628-v1.ckpt'
+dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/dist_mat/run329_results_bound'
 run_name = 'run329-bound-data'
 
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 SEED = 42
 EPOCHS = 100
 
 
-data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
+data = ImageClassificationDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
                         id_col='uuid', y_col='binder')
 
 # npy_file =  'data/preprocessed/pan_human_data.npy'
@@ -40,15 +36,21 @@ data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,
 
 data.setup(train_size=0.85, target='peptide', low=50, high=700, random_seed=SEED)
 
+df = pd.read_csv(tsv, sep='\t')
 
 train_loader = data.train_dataloader()
 print("Train len:", len(data.train))
 test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
-model = GCN(embedding_dim=1280)
+# for batch in train_loader:
+#     name, _, label = batch
+#     print(name, label)
+
+# model = ResNet([2, 2], num_classes=1).float()
+model = SimpleCNN((1, 427, 427), 1)
 criterion = nn.BCELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=0.01)
 
 def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
     last_loss = 0.0
@@ -59,15 +61,15 @@ def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_f
     for i, batch in enumerate(train_dataloader):
         # get the inputs; data is a list of [inputs, labels]
         # prot1, prot2, labels = batch
-        prot, labels = batch
+        img, labels = batch
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # a = list(model.parameters())[0].clone()
 
         # forward + backward + optimize
-        outputs = model(prot)
-        labels = labels.type(torch.float)
+        outputs = model(img)
+        labels = labels.float().unsqueeze(1)
         # print(outputs)
         loss = loss_fn(outputs, labels)
         loss.backward()
@@ -103,11 +105,11 @@ def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLo
         for i, vdata in enumerate(val_dataloader):
             # vprot1, vprot2, vlabels = vdata
             # voutputs = model(vprot1, vprot2)
-            vprot, vlabels = vdata
-            voutputs = model(vprot)
+            vimg, vlabels = vdata
+            voutputs = model(vimg)
 
-            # print(voutputs, vlabels)
-            vlabels = vlabels.type(torch.float)
+            print(voutputs, vlabels)
+            vlabels = vlabels.float().unsqueeze(1)
             vloss = loss_fn(voutputs, vlabels)
             running_vloss += vloss
 
