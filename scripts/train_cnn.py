@@ -13,13 +13,13 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
-from src.models.tcr_gnn import LightningGCN
+from src.models.tcr_cnn import ResNet50TransferLearning
 
 tsv = 'data/preprocessed/run329_results.tsv'
 dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/graphs/run329_results_bound'
 # ckpt = 'checkpoint/run329-data/ppi_gnn/epoch=0-step=628-v1.ckpt'
 run_name = 'run329-bound-data'
-model_name = 'tcr_gcn'
+model_name = 'tcr_cnn'
 
 BATCH_SIZE = 16
 SEED = 21
@@ -42,9 +42,9 @@ test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
 
-tcr_gcn = LightningGCN(embedding_dim=1280) # ESM embedding dim: 1280
+model = ResNet50TransferLearning() # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint',run_name, model_name), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs',run_name), name=model_name)
 trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], \
                     accelerator='gpu', devices=1, log_every_n_steps=30, check_val_every_n_epoch=1)
-trainer.fit(tcr_gcn, train_dataloaders=train_loader, val_dataloaders=test_loader)
+trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=test_loader)

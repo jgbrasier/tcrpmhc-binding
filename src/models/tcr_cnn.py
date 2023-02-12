@@ -1,5 +1,12 @@
 import torch
 import torch.nn as nn
+import pytorch_lightning as pl
+
+from torchmetrics.classification.accuracy import BinaryAccuracy
+from torchmetrics.classification.auroc import BinaryAUROC
+from torchmetrics.classification.precision_recall import BinaryPrecision, BinaryRecall
+from torchmetrics.classification.f_beta import BinaryF1Score
+
 
 class SimpleCNN(nn.Module):
     def __init__(self, input_shape, num_classes):
@@ -89,6 +96,83 @@ class ResNet(nn.Module):
         out = torch.flatten(out, 1)
         out = self.fc(out)
         return self.activation(out)
+
+import torchvision.models as models
+
+class ResNet50TransferLearning(pl.LightningModule):
+    def __init__(self, num_classes: int = 1, learning_rate: float = 0.001):
+        super().__init__()
+
+        # init a pretrained resnet
+        backbone = models.resnet50(weights="DEFAULT")
+        num_filters = backbone.fc.in_features
+        layers = list(backbone.children())[:-1]
+        self.feature_extractor = nn.Sequential(*layers)
+
+        # use the pretrained model
+        self.fc = nn.Linear(num_filters, num_classes)
+        self.activation = nn.Sigmoid()
+
+        # metrics
+        self.loss_fn = nn.BCELoss()
+        self._acc = BinaryAccuracy()
+        self._precision = BinaryPrecision()
+        self._recall = BinaryRecall()
+        self._f1 = BinaryF1Score()
+        self._auroc = BinaryAUROC()
+
+    def forward(self, x):
+        self.feature_extractor.eval()
+        with torch.no_grad():
+            representations = self.feature_extractor(x).flatten(1)
+        x = self.fc(representations)
+        return self.activation(x)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        prot, label = batch
+        label = label.type(torch.float) # output is float32 needs to match
+        output = self(prot)
+        loss = self.loss_fn(output, label)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        prot, label = batch
+        output = self(prot)
+        label = label.type(torch.float)
+        loss = self.loss_fn(output, label) # output is float32 needs to match
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
+        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        prot, label = batch
+        output = self(prot)
+        loss = self.loss_fn(output, label)
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
+        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss    
 
 
 

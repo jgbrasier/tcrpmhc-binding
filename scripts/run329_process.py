@@ -32,20 +32,17 @@ from src.processing.graph import (convert_nx_to_pyg_data,
 
 
 tsv_path = 'data/preprocessed/run329_results.tsv'
-pdb_dir = 'data/pdb/run329_results_for_jg'
-out_dir = 'data/graphs/run329_results_bound'
-dist_mat_dir = 'data/dist_mat/run329_results_bound'
 
 df = pd.read_csv(tsv_path, sep='\t')
 
 encoder = partial(compute_esm_embedding, representation='residue', model_name = "esm1b_t33_650M_UR50S", output_layer = 33)
 
 
-if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
-
 ### ----------------------------------------------------------------------------------
 ### seperate --> unbind tcr and pmhc structures
+# out_dir = 'data/graphs/run329_results'
+# if not os.path.exists(out_dir):
+#     os.makedirs(out_dir)
 # for i in tqdm(df.index):
 #     pdb_id = str(df.iloc[i]['uuid'])
 #     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
@@ -63,6 +60,9 @@ if not os.path.exists(out_dir):
 
 ### ----------------------------------------------------------------------------------
 ### keep them together
+# out_dir = 'data/graphs/run329_results_bound'
+# if not os.path.exists(out_dir):
+#     os.makedirs(out_dir)
 # for i in tqdm(df.index):
 #     pdb_id = str(df.iloc[i]['uuid'])
 #     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
@@ -83,6 +83,9 @@ if not os.path.exists(out_dir):
 
 ### ---------------------------------------------------------------------------------
 ### DISTANCE MATRIX
+dist_mat_dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/dist_mat/run329_results_bound'
+pdb_dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/pdb/run329_results_for_jg'
+
 
 if not os.path.exists(dist_mat_dir):
     os.makedirs(dist_mat_dir)
@@ -103,5 +106,9 @@ config = ProteinGraphConfig(**params)
 for i in tqdm(df.index):
     pdb_id = str(df.iloc[i]['uuid'])
     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
-    g = construct_graph(config=config, pdb_path=pdb_path)
-    np.save(os.path.join(dist_mat_dir, pdb_id+'.npy'), np.array(g.graph['dist_mat']))
+    save_path = os.path.join(dist_mat_dir, pdb_id+'.npy')
+    if os.path.exists(save_path):
+        continue
+    else:
+        g = construct_graph(config=config, pdb_path=pdb_path)
+        np.save(save_path, np.array(g.graph['dist_mat']))

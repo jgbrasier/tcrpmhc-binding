@@ -173,10 +173,10 @@ class TCRpMHCDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         # TODO:
         raise NotImplementedError
-        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
+        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False, collate_fn=self.collate)  # type: ignore
     
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
+        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False, collate_fn=self.collate)  # type: ignore
 
 
 if __name__=='__main__':

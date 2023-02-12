@@ -16,7 +16,7 @@ print("Using:", DEVICE)
 
 
 from src.dataset import ImageClassificationDataModule
-from src.models.tcr_cnn import ResNet, SimpleCNN
+from src.models.tcr_cnn import ResNet, SimpleCNN, ResNet50TransferLearning
 
 tsv = 'data/preprocessed/run329_results.tsv'
 dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/dist_mat/run329_results_bound'
@@ -43,82 +43,82 @@ print("Train len:", len(data.train))
 test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
-for batch in train_loader:
-    name, _, label = batch
-    print(name, label)
+# for batch in train_loader:
+#     name, _, label = batch
+#     print(name, label)
 
-# # model = ResNet([2, 2], num_classes=1).float()
-# model = SimpleCNN((1, 427, 427), 1)
-# criterion = nn.BCELoss()
-# optimizer = Adam(model.parameters(), lr=0.01)
+# model = ResNet([2, 2], num_classes=1).float()
+model = SimpleCNN((1, 427, 427), 1)
+criterion = nn.BCELoss()
+optimizer = Adam(model.parameters(), lr=0.01)
 
-# def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
-#     last_loss = 0.0
-#     running_loss = 0.0
+def train_epoch(idx: int, model: nn.Module, train_dataloader: DataLoader, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device: torch.device) -> float:
+    last_loss = 0.0
+    running_loss = 0.0
 
-#     print_every = 10
+    print_every = 10
 
-#     for i, batch in enumerate(train_dataloader):
-#         # get the inputs; data is a list of [inputs, labels]
-#         # prot1, prot2, labels = batch
-#         img, labels = batch
-#         # zero the parameter gradients
-#         optimizer.zero_grad()
+    for i, batch in enumerate(train_dataloader):
+        # get the inputs; data is a list of [inputs, labels]
+        # prot1, prot2, labels = batch
+        img, labels = batch
+        # zero the parameter gradients
+        optimizer.zero_grad()
 
-#         # a = list(model.parameters())[0].clone()
+        # a = list(model.parameters())[0].clone()
 
-#         # forward + backward + optimize
-#         outputs = model(img)
-#         labels = labels.float().unsqueeze(1)
-#         # print(outputs)
-#         loss = loss_fn(outputs, labels)
-#         loss.backward()
-#         optimizer.step()
+        # forward + backward + optimize
+        outputs = model(img)
+        labels = labels.float().unsqueeze(1)
+        # print(outputs)
+        loss = loss_fn(outputs, labels)
+        loss.backward()
+        optimizer.step()
 
-#         # check if weights are being updated
-#         # b = list(model.parameters())[0].clone()
-#         # print(torch.equal(a, b))
-#         # assert torch.equal(a, b)
+        # check if weights are being updated
+        # b = list(model.parameters())[0].clone()
+        # print(torch.equal(a, b))
+        # assert torch.equal(a, b)
 
-#         # print statistics
-#         running_loss += loss.item()
-#         if i % print_every == print_every-1:    # print every 100 mini-batches
-#             last_loss = running_loss / print_every
-#             running_loss = 0.0
-#     return last_loss
+        # print statistics
+        running_loss += loss.item()
+        if i % print_every == print_every-1:    # print every 100 mini-batches
+            last_loss = running_loss / print_every
+            running_loss = 0.0
+    return last_loss
 
-# def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
-#         epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
-#     history = {'train_loss': [],
-#             'val_loss': []
-#             }
-#     for epoch in range(1, epochs+1):
-#         model.train(True)
-#         t1 = time.time()
-#         avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
-#         t2 = time.time()
+def train(model: nn.Module, train_dataloader: DataLoader, val_dataloader: DataLoader, 
+        epochs: int, loss_fn: torch.nn.modules.loss._Loss, optimizer: Optimizer, device=DEVICE) -> dict:
+    history = {'train_loss': [],
+            'val_loss': []
+            }
+    for epoch in range(1, epochs+1):
+        model.train(True)
+        t1 = time.time()
+        avg_loss = train_epoch(epoch, model, train_dataloader, loss_fn, optimizer, device)
+        t2 = time.time()
 
-#         print(f'epoch {epoch} time: {t2-t1}')
-#         model.train(False)
+        print(f'epoch {epoch} time: {t2-t1}')
+        model.train(False)
 
-#         running_vloss = 0.0
-#         for i, vdata in enumerate(val_dataloader):
-#             # vprot1, vprot2, vlabels = vdata
-#             # voutputs = model(vprot1, vprot2)
-#             vimg, vlabels = vdata
-#             voutputs = model(vimg)
+        running_vloss = 0.0
+        for i, vdata in enumerate(val_dataloader):
+            # vprot1, vprot2, vlabels = vdata
+            # voutputs = model(vprot1, vprot2)
+            vimg, vlabels = vdata
+            voutputs = model(vimg)
 
-#             print(voutputs, vlabels)
-#             vlabels = vlabels.float().unsqueeze(1)
-#             vloss = loss_fn(voutputs, vlabels)
-#             running_vloss += vloss
+            print(voutputs, vlabels)
+            vlabels = vlabels.float().unsqueeze(1)
+            vloss = loss_fn(voutputs, vlabels)
+            running_vloss += vloss
 
-#         avg_vloss = running_vloss / (i + 1)
-#         print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
-#         history['train_loss'].append(avg_loss)
-#         history['val_loss'].append(avg_vloss)
+        avg_vloss = running_vloss / (i + 1)
+        print("epoch: {:<5} train loss: {:<20} val_loss: {:<20}".format(epoch, avg_loss, avg_vloss))
+        history['train_loss'].append(avg_loss)
+        history['val_loss'].append(avg_vloss)
 
-#     return history
+    return history
 
-# history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
+history = train(model, train_loader, test_loader, EPOCHS, criterion, optimizer)
 

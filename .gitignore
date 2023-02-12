@@ -141,3 +141,6 @@ data/pdb
 data/graphs
 data/preprocessed/tc-hard
 data/dist_mat
+
+# logs
+sbatch_logs
