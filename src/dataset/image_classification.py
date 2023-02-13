@@ -41,7 +41,7 @@ class ImageClassificationDataset(Dataset):
         img = normalize(img, p=1).float()
 
         label = torch.tensor(self.labels[idx])
-        return self.names[idx], img, label
+        return img, label
 
 class ImageClassificationDataModule(pl.LightningDataModule):
     """
@@ -78,7 +78,7 @@ class ImageClassificationDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         # TODO:
         raise NotImplementedError
-        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True)  # type: ignore
+        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False)  # type: ignore
     
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True)  # type: ignore
+        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False)  # type: ignore
