@@ -31,9 +31,9 @@ dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/dist_mat/run329_results_bound'
 run_name = 'run329-bound-data'
 model_name = 'tcr_cnn'
 
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 SEED = 5
-EPOCHS = 100
+EPOCHS = 50
 
 data = ImageClassificationDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
                         id_col='uuid', y_col='binder', num_workers=16)
