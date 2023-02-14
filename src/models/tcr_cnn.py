@@ -99,9 +99,81 @@ class ResNet(nn.Module):
 
 import torchvision.models as models
 
+class ResNetLightningModule(pl.LightningModule):
+    def __init__(self, num_classes: int = 1, learning_rate: float = 0.001):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # init a pretrained resnet
+        self.model = ResNet([2, 2])
+
+        # metrics
+        self.loss_fn = nn.BCELoss()
+        self._acc = BinaryAccuracy()
+        self._precision = BinaryPrecision()
+        self._recall = BinaryRecall()
+        self._f1 = BinaryF1Score()
+        self._auroc = BinaryAUROC()
+
+    def forward(self, x):
+        return self.model(x)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        prot, label = batch
+        label = torch.unsqueeze(label.type(torch.float), dim=1) # output is float32 needs to match
+        output = self(prot)
+        loss = self.loss_fn(output, label)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        prot, label = batch
+        output = self(prot)
+        label = torch.unsqueeze(label.type(torch.float), dim=1) # output is float32 needs to match
+        loss = self.loss_fn(output, label) # output is float32 needs to match
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
+        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        prot, label = batch
+        output = self(prot)
+        label = torch.unsqueeze(label.type(torch.float), dim=1) # output is float32 needs to match
+
+        loss = self.loss_fn(output, label)
+        acc = self._acc(output, label)
+        precision = self._precision(output, label)
+        recall = self._recall(output, label)
+        f1 = self._f1(output, label)
+        auroc = self._auroc(output, label)
+        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        return loss    
+
+
+
+
+
 class ResNet50TransferLearning(pl.LightningModule):
     def __init__(self, num_classes: int = 1, learning_rate: float = 0.001):
         super().__init__()
+        self.save_hyperparameters()
 
         # init a pretrained resnet
         backbone = models.resnet50(weights="DEFAULT")
@@ -133,7 +205,7 @@ class ResNet50TransferLearning(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         prot, label = batch
-        label = label.type(torch.float) # output is float32 needs to match
+        label = torch.unsqueeze(label.type(torch.float), dim=1) # output is float32 needs to match
         output = self(prot)
         loss = self.loss_fn(output, label)
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
@@ -142,7 +214,7 @@ class ResNet50TransferLearning(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         prot, label = batch
         output = self(prot)
-        label = label.type(torch.float)
+        label = torch.unsqueeze(label.type(torch.float), dim=1) # output is float32 needs to match
         loss = self.loss_fn(output, label) # output is float32 needs to match
         acc = self._acc(output, label)
         precision = self._precision(output, label)

@@ -3,7 +3,7 @@ import sys
 
 import numpy as np
 
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 import pandas as pd
 import torch
