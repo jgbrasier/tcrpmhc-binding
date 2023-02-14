@@ -71,8 +71,8 @@ class TCRBindDataModule(pl.LightningDataModule):
     Jha, K., Saha, S. & Singh, H. Prediction of protein–protein interaction using graph neural networks. 
     Sci Rep 12, 8360 (2022). https://doi.org/10.1038/s41598-022-12201-9
     """
-    def __init__(self, tsv_path: str = None, processed_dir: str = None, y_col='binder',
-                target='epitope', low: int = 50, high: int = 800, include_seq_data: bool=False,
+    def __init__(self, tsv_path: str = None, processed_dir: str = None, y_col='binder', \
+                include_seq_data: bool=False, \
                 batch_size: int = 32, num_workers: int = 0, device=torch.device('cpu')):
         super().__init__()
         self.save_hyperparameters()
@@ -92,12 +92,12 @@ class TCRBindDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, split='random', random_seed: int = 42):
+    def setup(self, train_size: int = 0.8, split='random', target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
         assert split in ['random', 'hard']
         if split == 'hard':
-            train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
-                                                        low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
+            train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
+                                                        low=low, high=high, random_seed=random_seed)
         elif split == 'random':
             train_df, test_df = train_test_split(self.df, train_size=train_size)
 
@@ -153,10 +153,14 @@ class TCRpMHCDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
+    def setup(self, train_size: int = 0.8, split='random', target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
-        train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
-                                                    low=low, high=high, random_seed=random_seed)
+        assert split in ['random', 'hard']
+        if split == 'hard':
+            train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
+                                                        low=low, high=high, random_seed=random_seed)
+        elif split == 'random':
+            train_df, test_df = train_test_split(self.df, train_size=train_size)
 
         self.train = GraphDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col, device=self.hparams.device)
         if train_size == 1:
