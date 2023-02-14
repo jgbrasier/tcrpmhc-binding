@@ -6,6 +6,7 @@ from tqdm import tqdm
 import pandas as pd
 
 from src.utils import hard_split_df
+from sklearn.model_selection import train_test_split
 
 import torch
 from torch_geometric.data import Data, Batch
@@ -91,10 +92,14 @@ class TCRBindDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, random_seed: int = 42):
+    def setup(self, train_size: int = 0.8, split='random', random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
-        train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
-                                                    low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
+        assert split in ['random', 'hard']
+        if split == 'hard':
+            train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
+                                                        low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
+        elif split == 'random':
+            train_df, test_df = train_test_split(self.df, train_size=train_size)
 
         self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
         if train_size == 1:

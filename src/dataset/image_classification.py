@@ -60,10 +60,14 @@ class ImageClassificationDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
+    def setup(self, split='random', train_size: int = 0.8, target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
-        train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
-                                                    low=low, high=high, random_seed=random_seed)
+        assert split in ['random', 'hard']
+        if split == 'hard':
+            train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=self.hparams.target, min_ratio=train_size,
+                                                        low=self.hparams.low, high=self.hparams.high, random_seed=random_seed)
+        elif split == 'random':
+            train_df, test_df = train_test_split(self.df, train_size=train_size)
 
         self.train = ImageClassificationDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
         if train_size == 1:
