@@ -22,7 +22,7 @@ run_name = 'run329-bound-data'
 model_name = 'tcr_gcn'
 
 BATCH_SIZE = 16
-SEED = 21
+SEED = 24
 EPOCHS = 100
 
 
@@ -33,7 +33,7 @@ data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,
 # processed_dir =  'data/graphs/pan_human_new'
 # data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
 
-data.setup(train_size=0.85, target='peptide', low=50, high=600, random_seed=SEED)
+data.setup(split='random', train_size=0.85, target='peptide', low=50, high=600, random_seed=SEED)
 
 
 train_loader = data.train_dataloader()

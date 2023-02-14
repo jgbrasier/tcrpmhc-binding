@@ -20,26 +20,24 @@ class GCN(nn.Module):
 
         # for protein 1
         self.n_output = n_output
-        self.conv1 = GCNConv(embedding_dim, embedding_dim)
+        self.conv1 = GCNConv(embedding_dim, embedding_dim//2)
+        self.conv2 = GCNConv(embedding_dim//2, embedding_dim)
         self.fc1 = nn.Linear(embedding_dim, output_dim)
 
 
         self.relu = nn.LeakyReLU()
         self.dropout = nn.Dropout(dropout)
-        self.sigmoid = nn.Sigmoid()
 
         # combined layers
         self.fc2 = nn.Linear(output_dim ,output_dim//2)
         self.out = nn.Linear(output_dim//2, self.n_output)
 
-    def forward(self, data):
-        #get graph input for protein 1 
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        # get graph input for protein 2
-
+    def forward(self, x, edge_index, batch):
         x = self.conv1(x, edge_index)
         x = self.relu(x)
-        
+        x = self.conv2(x, edge_index)
+        x = self.relu(x)
+
 	    # global pooling
         x = global_mean_pool(x, batch)   
 
@@ -52,7 +50,6 @@ class GCN(nn.Module):
         xf = self.relu(xf)
         # xf = self.dropout(xf)
         out = self.out(xf)
-        out = self.sigmoid(out)
         return out
 
 class LightningGCN(pl.LightningModule):
@@ -62,17 +59,8 @@ class LightningGCN(pl.LightningModule):
         self.save_hyperparameters()
 
         # for protein 1
-        self.conv1 = GCNConv(self.hparams.embedding_dim, self.hparams.embedding_dim)
-        self.fc1 = nn.Linear(self.hparams.embedding_dim, self.hparams.output_dim)
-
-
-        self.relu = nn.LeakyReLU()
-        self.dropout = nn.Dropout(self.hparams.dropout)
+        self.model = GCN(n_output=1, embedding_dim=embedding_dim, output_dim=output_dim, dropout=dropout)
         self.sigmoid = nn.Sigmoid()
-
-        # combined layers
-        self.fc2 = nn.Linear(self.hparams.output_dim ,self.hparams.output_dim//2)
-        self.out = nn.Linear(self.hparams.output_dim//2, self.hparams.n_output)
 
         # metrics
         self.loss_fn = nn.BCELoss()
@@ -86,23 +74,8 @@ class LightningGCN(pl.LightningModule):
         #get graph input for protein 1 
         x, edge_index, batch = data.x, data.edge_index, data.batch
         # get graph input for protein 2
-
-        x = self.conv1(x, edge_index)
-        x = self.relu(x)
-        
-	    # global pooling
-        x = global_mean_pool(x, batch)   
-
-        # flatten
-        xf = self.relu(self.fc1(x))
-        # x = self.dropout(x)
-
-        # add some dense layers
-        xf = self.fc2(xf)
-        xf = self.relu(xf)
-        # xf = self.dropout(xf)
-        out = self.out(xf)
-        out = self.sigmoid(out)
+        x = self.model(x, edge_index, batch)
+        out = self.sigmoid(x)
         return out
 
     def configure_optimizers(self):

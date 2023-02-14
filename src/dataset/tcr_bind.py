@@ -95,17 +95,20 @@ class TCRBindDataModule(pl.LightningDataModule):
     def setup(self, train_size: int = 0.8, split='random', target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
         assert split in ['random', 'hard']
+        print("Dataset train/val split method:", split)
         if split == 'hard':
             train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
                                                         low=low, high=high, random_seed=random_seed)
+            self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
+            if train_size == 1:
+                self.test = None
+            else:
+                self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
         elif split == 'random':
-            train_df, test_df = train_test_split(self.df, train_size=train_size)
-
-        self.train = TCRBindDataset(train_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
-        if train_size == 1:
-            self.test = None
-        else:
-            self.test = TCRBindDataset(test_df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
+            dataset = TCRBindDataset(self.df, self.hparams.processed_dir, self.hparams.y_col, self.hparams.include_seq_data)
+            self.train, self.test = torch.utils.data.random_split(dataset, \
+            [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
+            generator=torch.Generator().manual_seed(random_seed))
 
         return self.selected_targets
 
@@ -153,21 +156,23 @@ class TCRpMHCDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, train_size: int = 0.8, split='random', target='epitope', low: int = 50, high: int = 800, random_seed: int = 42):
+    def setup(self, train_size: int = 0.8, split='random', target='epitope', low: int = 50, high: int = 800, random_seed: int = None):
         assert train_size > 0 and train_size <= 1, "train_size must be in (0, 1]"
         assert split in ['random', 'hard']
+        print("Dataset train/val split method:", split)
         if split == 'hard':
             train_df, test_df, self.selected_targets = hard_split_df(self.df, target_col=target, min_ratio=train_size,
                                                         low=low, high=high, random_seed=random_seed)
+            self.train = GraphDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
+            if train_size == 1:
+                self.test = None
+            else:
+                self.test = GraphDataset(test_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
         elif split == 'random':
-            train_df, test_df = train_test_split(self.df, train_size=train_size)
-
-        self.train = GraphDataset(train_df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col, device=self.hparams.device)
-        if train_size == 1:
-            self.test = None
-        else:
-            self.test = GraphDataset(test_df, self.hparams.processed_dir, self.hparams.id_col,self.hparams.y_col, device=self.hparams.device)
-        return self.selected_targets
+            dataset = GraphDataset(self.df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
+            self.train, self.test = torch.utils.data.random_split(dataset, \
+            [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
+            generator=torch.Generator().manual_seed(random_seed))
 
     # custom collate see: https://github.com/pyg-team/pytorch_geometric/issues/781
     def collate(self, data_list):
