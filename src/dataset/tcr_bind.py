@@ -163,9 +163,8 @@ class TCRpMHCDataModule(pl.LightningDataModule):
     # custom collate see: https://github.com/pyg-team/pytorch_geometric/issues/781
     def collate(self, data_list):
         batch_A = Batch.from_data_list([data[0] for data in data_list])
-        batch_label = torch.tensor([data[1] for data in data_list]).view(-1, 1)
-        # batch_name = [data[-1] for data in data_list]
-        return batch_A, batch_label # , batch_name
+        batch_label = torch.tensor([data[-1] for data in data_list]).view(-1, 1)
+        return batch_A, batch_label
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
@@ -173,10 +172,10 @@ class TCRpMHCDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         # TODO:
         raise NotImplementedError
-        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False, collate_fn=self.collate)  # type: ignore
+        return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
     
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=False, collate_fn=self.collate)  # type: ignore
+        return DataLoader(self.test, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True, collate_fn=self.collate)  # type: ignore
 
 
 if __name__=='__main__':
