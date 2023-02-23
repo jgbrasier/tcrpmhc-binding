@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 
 from src.utils import hard_split_df
+from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn as nn
