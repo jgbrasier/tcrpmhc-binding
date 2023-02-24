@@ -119,14 +119,16 @@ def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq):
         aa = AA_3to1[res[1]['residue_name'].drop_duplicates().values[0]]
         d.append((aa, res[1]['residue_name'].index.tolist()))
 
-    for seq in chain_seq:
+    for idx, seq in enumerate(chain_seq):
         slice = []
         z = list(zip(seq, d)).copy()
         assert [x[0] for x in z] == [x[1][0] for x in z]
         for i, x in enumerate(z):
             slice += x[1][1]
             del(d[0])
-        out.append(df.iloc[slice])
+        seq_df = df.iloc[slice]
+        seq_df['chain_id'] = string.ascii_uppercase[idx]
+        out.append(seq_df)
     # from finetuned AF2 model: sequence are in order: pmhc, epitope, tra, trb
     # TODO: make this more generalizable
     pmhc_df = pd.concat((out[0], out[1]))
