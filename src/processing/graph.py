@@ -18,10 +18,11 @@ from torch_geometric.data import Data, Dataset
 from prody import parsePDBHeader
 
 from functools import partial
+from graphein.protein.utils import filter_dataframe
 from graphein.protein.graphs import process_dataframe, deprotonate_structure, convert_structure_to_centroids, subset_structure_to_atom_type, filter_hetatms, remove_insertions
 from graphein.protein.graphs import initialise_graph_with_metadata, add_nodes_to_graph, compute_edges
 from graphein.protein.edges import add_peptide_bonds, add_hydrogen_bond_interactions, add_distance_threshold
-from graphein.protein import plotly_protein_structure_graph
+from graphein.protein import compute_distmat, get_interacting_atoms
 from graphein.protein.features.sequence.utils import (
     compute_feature_over_chains,
     subset_by_node_feature_value,
@@ -161,9 +162,6 @@ def get_all_residue_atoms(partial_df: pd.DataFrame, full_df: pd.DataFrame):
     assert all(partial_df.columns == full_df.columns), "DataFrame column names must match"
     return full_df[full_df['residue_number'].isin(partial_df['residue_number'])]
 
-from graphein.protein.utils import filter_dataframe
-from graphein.protein import compute_distmat, get_interacting_atoms
-
 def add_intra_chain_distance_threshold(G: nx.Graph, chains: Union[List[str], str], threshold: float):
     if isinstance(chains, str) and len(chains) == 1:
         chains = list(chains)
@@ -177,7 +175,7 @@ def add_intra_chain_distance_threshold(G: nx.Graph, chains: Union[List[str], str
         n1 = pdb_df.loc[a1, "node_id"]
         n2 = pdb_df.loc[a2, "node_id"]
 
-        if not G.has_edge(n1, n2):
+        if (n1 != n2) and not G.has_edge(n1, n2):
             G.add_edge(n1, n2, kind={"intra_distance_threshold"})
 
 
@@ -197,9 +195,11 @@ def add_inter_chain_distance_threshold(G: nx.Graph, chains_1: Union[List[str], s
         n2 = G.graph["pdb_df"].loc[a2, "node_id"]
         n1_chain_cat = 1 if G.graph["pdb_df"].loc[a1, "chain_id"] in chains_1 else 2
         n2_chain_cat = 1 if G.graph["pdb_df"].loc[a2, "chain_id"] in chains_1 else 2
+
         cond_1 = (n1_chain_cat != n2_chain_cat)
         cond_2 = G.has_edge(n1, n2)
-        if cond_1 and not cond_2:
+        cond_3 = (n1 != n2)
+        if cond_1 and not cond_2 and cond_3:
             print(n1, n2)
             G.add_edge(n1, n2, kind={"inter_distance_threshold"})
 
@@ -295,7 +295,7 @@ def compute_residue_embedding(
 
     return G
 
-def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool =False) -> Data:
+def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, edge_feat_name: Union[List[str], str] = None, graph_features:bool =False) -> Data:
     # Initialise dict used to construct Data object
     # data = {k: v for k, v in sequence_data.items()}
     data = {"node_id": list(G.nodes())}
@@ -312,11 +312,13 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, graph_features:bool
     data['x'] = torch.from_numpy(np.array(node_features))
 
     # Add edge features
-    # for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
-    #     for key, value in feat_dict.items():
-    #         data[str(key)] = (
-    #             [value] if i == 0 else data[str(key)] + [value]
-    #         )
+    if edge_feat_name:
+        pos_dict = {n: i for i, n in enumerate(edge_feat_name)}
+        edge_features = np.zeros((len(G.edges(data=True)), len(edge_feat_name)))
+        for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
+            for key, value in feat_dict.items():
+                edge_features[i, pos_dict[key]] = value
+        data['edge_features'] = torch.from_numpy(edge_features)
 
     # Add graph-level features
     if graph_features:
