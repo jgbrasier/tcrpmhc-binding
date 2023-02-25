@@ -226,10 +226,10 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m
         pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['epitope'])]
     return tcr_df, pmhc_df
 
-def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 5.):
+def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 5., contact_dist_threshold: int = 8.):
     raw_df = deprotonate_structure(raw_df)
     tcr_df, pmhc_df = split_af2_tcrpmhc_df(raw_df, chain_seq)
-    contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=8.5)
+    contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=contact_dist_threshold)
     df = get_all_residue_atoms(contact_df, pd.concat((tcr_df, pmhc_df)))
     df = process_dataframe(df,
                             chain_selection = "all",
