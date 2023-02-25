@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Generator, List, Optional
+from typing import Callable, Dict, Generator, List, Optional, Union, Tuple
 import string
 import re
 import os
@@ -135,6 +135,86 @@ def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq):
     tcr_df = pd.concat((out[2], out[3]))
     return tcr_df, pmhc_df
 
+def get_contact_atoms(df1: pd.DataFrame, df2:pd.DataFrame, threshold:float, deprotonate=True, coord_names=['x_coord', 'y_coord', 'z_coord']):
+    assert all(df1.columns == df2.columns), "DataFrame column names must match"
+    if deprotonate:
+        df1 = deprotonate_structure(df1)
+        df2 = deprotonate_structure(df2)
+
+    # Extract coordinates from dataframes
+    coords1 = df1[coord_names].to_numpy()
+    coords2 = df2[coord_names].to_numpy()
+
+    # Compute pairwise distances between atoms
+    dist_matrix = np.sqrt(((coords1[:, None] - coords2) ** 2).sum(axis=2))
+
+    # Create a new dataframe containing pairs of atoms whose distance is below the threshold
+    pairs = np.argwhere(dist_matrix < threshold)
+    atoms1, atoms2 = df1.iloc[pairs[:, 0]], df2.iloc[pairs[:, 1]]
+    atoms1_id = atoms1['chain_id'].map(str) + ":" + atoms1['residue_name'].map(str) + ":" + atoms1['residue_number'].map(str)
+    atoms2_id = atoms2['chain_id'].map(str) + ":" + atoms2['residue_name'].map(str) + ":" + atoms2['residue_number'].map(str)
+    node_pairs = np.vstack((atoms1_id.values, atoms2_id.values)).T
+    result = pd.concat([df1.iloc[np.unique(pairs[:, 0])], df2.iloc[np.unique(pairs[:, 1])]])
+    return result, node_pairs
+
+def get_all_residue_atoms(partial_df: pd.DataFrame, full_df: pd.DataFrame):
+    assert all(partial_df.columns == full_df.columns), "DataFrame column names must match"
+    return full_df[full_df['residue_number'].isin(partial_df['residue_number'])]
+
+from graphein.protein.utils import filter_dataframe
+from graphein.protein import compute_distmat, get_interacting_atoms
+
+def add_intra_chain_distance_threshold(G: nx.Graph, chains: Union[List[str], str], threshold: float):
+    if isinstance(chains, str) and len(chains) == 1:
+        chains = list(chains)
+    
+    node_list = [n for n, d in G.nodes(data=True) if d["chain_id"] in chains]
+    pdb_df = filter_dataframe(G.graph["pdb_df"], "node_id", node_list, True)
+    dist_mat = compute_distmat(pdb_df)
+    interacting_nodes = get_interacting_atoms(threshold, distmat=dist_mat)
+    interacting_nodes = list(zip(interacting_nodes[0], interacting_nodes[1]))
+    for a1, a2 in interacting_nodes:
+        n1 = pdb_df.loc[a1, "node_id"]
+        n2 = pdb_df.loc[a2, "node_id"]
+
+        if not G.has_edge(n1, n2):
+            G.add_edge(n1, n2, kind={"intra_distance_threshold"})
+
+
+def add_inter_chain_distance_threshold(G: nx.Graph, chains_1: Union[List[str], str], \
+                                       chains_2: Union[List[str], str], threshold: float):
+    if isinstance(chains_1, str) and len(chains_1) == 1:
+        chains_1 = list(chains_1)
+    if isinstance(chains_2, str) and len(chains_2) == 1:
+        chains_2 = list(chains_2)
+    pdb_df = filter_dataframe(G.graph["pdb_df"], "node_id", list(G.nodes()), True)
+    dist_mat = compute_distmat(pdb_df)
+    interacting_nodes = np.argwhere(dist_mat <= threshold)
+    get_interacting_atoms(threshold, distmat=dist_mat)
+    interacting_nodes = list(zip(interacting_nodes[0], interacting_nodes[1]))
+    for a1, a2 in interacting_nodes:
+        n1 = G.graph["pdb_df"].loc[a1, "node_id"]
+        n2 = G.graph["pdb_df"].loc[a2, "node_id"]
+        n1_chain_cat = 1 if G.graph["pdb_df"].loc[a1, "chain_id"] in chains_1 else 2
+        n2_chain_cat = 1 if G.graph["pdb_df"].loc[a2, "chain_id"] in chains_1 else 2
+        cond_1 = (n1_chain_cat != n2_chain_cat)
+        cond_2 = G.has_edge(n1, n2)
+        if cond_1 and not cond_2:
+            print(n1, n2)
+            G.add_edge(n1, n2, kind={"inter_distance_threshold"})
+
+def add_edge_from_pairs(G: nx.Graph, pairs: List[Union[List[str], Tuple[str]]], kind: Optional[str] ='from_pair'):
+    """Add edges between pairs of nodes on a graph G
+
+    :param G: Graph to add the edges
+    :type G: nx.Graph
+    :param pairs: Array or List of  pairs, ex: [(A:GLY:332, B:LEU:928), ...]
+    :type pairs: List(Union[tuple, list])
+    """
+    for n1, n2 in pairs:
+        if not G.has_edge(n1, n2):
+            G.add_edge(n1, n2, kind={kind})
+
 
 def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m=False):
     # each value of chain_key_dict is a list, can concatenate using +
@@ -146,11 +226,33 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m
         pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['epitope'])]
     return tcr_df, pmhc_df
 
-
-def build_residue_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =6.):
-
-    atom_processing_funcs = [deprotonate_structure, remove_insertions]
+def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 4.):
+    raw_df = deprotonate_structure(raw_df)
+    tcr_df, pmhc_df = split_af2_tcrpmhc_df(raw_df, chain_seq)
+    contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=8.5)
+    df = get_all_residue_atoms(contact_df, pd.concat((tcr_df, pmhc_df)))
+    df = process_dataframe(df,
+                            chain_selection = "all",
+                            insertions = False,
+                            deprotonate = True,
+                            keep_hets = [],
+                            granularity='CA') # alpha carbon
+    g = initialise_graph_with_metadata(protein_df=df, # from above cell
+                                    raw_pdb_df=raw_df, # Store this for traceability
+                                    pdb_code = pdb_code, #and again
+                                    granularity = 'CA' # Store this so we know what kind of graph we have
+                                    )
+    g = add_nodes_to_graph(g)
+    # g = compute_edges(g, funcs=[add_atomic_edges, add_bond_order])
+    g = compute_edges(g, funcs=[
+        partial(add_intra_chain_distance_threshold, chains=['A', 'B'], threshold=5.),
+        partial(add_intra_chain_distance_threshold, chains=['C', 'D'], threshold=5.),
+        partial(add_edge_from_pairs, pairs=pairs, kind='inter_chain')
+        # partial(add_inter_chain_distance_threshold, chains_1=['A', 'B'], chains_2=['C', 'D'], threshold=8.),
+    ])
+    return g
     
+def build_residue_dist_threshold_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =6.):
     df = process_dataframe(raw_df,
                             chain_selection = "all",
                             insertions = False,
@@ -188,7 +290,8 @@ def compute_residue_embedding(
         subgraph = subset_by_node_feature_value(G, "chain_id", chain)
 
         for i, (n, d) in enumerate(subgraph.nodes(data=True)):
-            G.nodes[n]["embedding"] = embedding[i]
+            if getattr(G.nodes, n, False):
+                G.nodes[n]["embedding"] = embedding[i]
 
     return G
 
@@ -256,13 +359,13 @@ def bound_pdb_to_pyg(pdb_path: str,
         tcr_raw_df, pmhc_raw_df = seperate_tcr_pmhc(raw_df, header['chain_key_dict'], include_b2m=include_b2m)
     
     # TCR graph
-    tcr_g = build_residue_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
+    tcr_g = build_residue_dist_threshold_graph(tcr_raw_df, pdb_id, egde_dist_threshold=egde_dist_threshold)
     tcr_g = compute_residue_embedding(tcr_g, embedding_function)
     # tra_seq_data =  seq_data[['va', 'ja', 'cdr3a', 'vb', 'jb', 'cdr3b']]
     tcr_pt = convert_nx_to_pyg_data(tcr_g, node_feat_name='embedding')
 
     # pMHC graph
-    pmhc_g = build_residue_graph(pmhc_raw_df, pdb_id,  egde_dist_threshold=egde_dist_threshold)
+    pmhc_g = build_residue_dist_threshold_graph(pmhc_raw_df, pdb_id,  egde_dist_threshold=egde_dist_threshold)
     pmhc_g = compute_residue_embedding(pmhc_g, embedding_function)
     # pmh_seq_data =  seq_data[['epitope', 'mhc_class', 'mhc']]
     pmh_pt = convert_nx_to_pyg_data(pmhc_g, node_feat_name='embedding')

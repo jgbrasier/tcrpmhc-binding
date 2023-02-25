@@ -25,7 +25,7 @@ from graphein.protein.visualisation import plotly_protein_structure_graph
 from src.processing.graph import (convert_nx_to_pyg_data, 
                                   read_pdb_to_dataframe, 
                                   seperate_tcr_pmhc,
-                                  build_residue_graph,
+                                  build_residue_dist_threshold_graph,
                                   split_af2_tcrpmhc_df,
                                   bound_pdb_to_pyg,
                                 )

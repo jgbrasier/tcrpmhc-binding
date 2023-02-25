@@ -22,7 +22,7 @@ from graphein.protein.visualisation import plotly_protein_structure_graph
 from src.processing.graph import (convert_nx_to_pyg_data, 
                                   read_pdb_to_dataframe,
                                   seperate_tcr_pmhc,
-                                  build_residue_graph,
+                                  build_residue_dist_threshold_graph,
                                   compute_residue_embedding,
                                   split_af2_tcrpmhc_df,
                                   bound_pdb_to_pyg,
@@ -63,7 +63,7 @@ for pdb in tqdm(pdb_codes):
         raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path, parse_header=False)
 
         # TCR graph
-        g = build_residue_graph(raw_df, pdb_id, egde_dist_threshold=6.0)
+        g = build_residue_dist_threshold_graph(raw_df, pdb_id, egde_dist_threshold=6.0)
         g = compute_residue_embedding(g, encoder)
         pt = convert_nx_to_pyg_data(g, node_feat_name='embedding')
         torch.save(pt, os.path.join(out_dir, f"{pdb_id}_tcr.pt"))
