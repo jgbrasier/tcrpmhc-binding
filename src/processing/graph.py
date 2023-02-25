@@ -18,17 +18,31 @@ from torch_geometric.data import Data, Dataset
 from prody import parsePDBHeader
 
 from functools import partial
-from graphein.protein.utils import filter_dataframe
-from graphein.protein.graphs import process_dataframe, deprotonate_structure, convert_structure_to_centroids, subset_structure_to_atom_type, filter_hetatms, remove_insertions
-from graphein.protein.graphs import initialise_graph_with_metadata, add_nodes_to_graph, compute_edges
-from graphein.protein.edges import add_peptide_bonds, add_hydrogen_bond_interactions, add_distance_threshold
+from graphein.protein.utils import (
+    compute_rgroup_dataframe,
+    filter_dataframe,
+    get_protein_name_from_filename,
+    three_to_one_with_mods,
+)
+from graphein.protein.graphs import (
+    process_dataframe, 
+    deprotonate_structure, 
+    subset_structure_to_atom_type, 
+    filter_hetatms, 
+    remove_insertions, 
+    add_nodes_to_graph, 
+    compute_edges,
+)
+from graphein.protein.edges import (
+    add_peptide_bonds, 
+    add_hydrogen_bond_interactions, 
+    add_distance_threshold,
+)
 from graphein.protein import compute_distmat, get_interacting_atoms
 from graphein.protein.features.sequence.utils import (
     compute_feature_over_chains,
     subset_by_node_feature_value,
 )
-
-from src.utils import AA_3to1
 
 
 def find_chain_names(header: dict):
@@ -113,11 +127,11 @@ def read_pdb_to_dataframe(
 
     return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
 
-def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq):
+def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq, rescale_residue_number: Optional[bool] = False):
     d = []
     out = []
     for res in df.groupby('residue_number'):
-        aa = AA_3to1[res[1]['residue_name'].drop_duplicates().values[0]]
+        aa = three_to_one_with_mods(res[1]['residue_name'].drop_duplicates().values[0])
         d.append((aa, res[1]['residue_name'].index.tolist()))
 
     for idx, seq in enumerate(chain_seq):
@@ -129,6 +143,8 @@ def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq):
             del(d[0])
         seq_df = df.iloc[slice]
         seq_df['chain_id'] = string.ascii_uppercase[idx]
+        if rescale_residue_number:
+            seq_df['residue_number'] = seq_df['residue_number'] - seq_df['residue_number'].min()
         out.append(seq_df)
     # from finetuned AF2 model: sequence are in order: pmhc, epitope, tra, trb
     # TODO: make this more generalizable
@@ -161,6 +177,8 @@ def get_contact_atoms(df1: pd.DataFrame, df2:pd.DataFrame, threshold:float, depr
 def get_all_residue_atoms(partial_df: pd.DataFrame, full_df: pd.DataFrame):
     assert all(partial_df.columns == full_df.columns), "DataFrame column names must match"
     return full_df[full_df['residue_number'].isin(partial_df['residue_number'])]
+
+
 
 def add_intra_chain_distance_threshold(G: nx.Graph, chains: Union[List[str], str], threshold: float):
     if isinstance(chains, str) and len(chains) == 1:
@@ -290,9 +308,81 @@ def compute_residue_embedding(
         subgraph = subset_by_node_feature_value(G, "chain_id", chain)
 
         for i, (n, d) in enumerate(subgraph.nodes(data=True)):
-            if getattr(G.nodes, n, False):
-                G.nodes[n]["embedding"] = embedding[i]
+            pass
+            # G.nodes[n]["embedding"] = embedding[int(G.nodes[n]['residue_number'])]
 
+    return G
+
+def initialise_graph_with_metadata(
+    protein_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    granularity: str,
+    name: Optional[str] = None,
+    pdb_code: Optional[str] = None,
+    pdb_path: Optional[str] = None,
+) -> nx.Graph:
+    """
+    Initializes the nx Graph object with initial metadata.
+
+    :param protein_df: Processed Dataframe of prot
+    ein structure.
+    :type protein_df: pd.DataFrame
+    :param full_df: Full dataframe of protein structure for comparison and traceability downstream.
+    :type full_df: pd.DataFrame
+    :param granularity: Granularity of the graph (eg ``"atom"``, ``"CA"``, ``"CB"`` etc or ``"contact"``).
+        If ``"contact"``, will automatically fetch the entire protein sequenec (and not just the contact subset)
+        See: :const:`~graphein.protein.config.GRAPH_ATOMS` and :const:`~graphein.protein.config.GRANULARITY_OPTS`.
+    :type granularity: str
+    :param name: specified given name for the graph. If None, the PDB code or the file name will be used to name the graph.
+    :type name: Optional[str], defaults to ``None``
+    :param pdb_code: PDB ID / Accession code, if the PDB is available on the PDB database.
+    :type pdb_code: Optional[str], defaults to ``None``
+    :param pdb_path: path to local PDB file, if constructing a graph from a local file.
+    :type pdb_path: Optional[str], defaults to ``None``
+    :return: Returns initial protein structure graph with metadata.
+    :rtype: nx.Graph
+    """
+
+    # Get name for graph if no name was provided
+    if name is None:
+        if pdb_path is not None:
+            name = get_protein_name_from_filename(pdb_path)
+        else:
+            name = pdb_code
+
+    G = nx.Graph(
+        name=name,
+        pdb_code=pdb_code,
+        pdb_path=pdb_path,
+        chain_ids=list(protein_df["chain_id"].unique()),
+        pdb_df=protein_df,
+        full_df=full_df,
+        rgroup_df=compute_rgroup_dataframe(remove_insertions(full_df)),
+        coords=np.asarray(protein_df[["x_coord", "y_coord", "z_coord"]]),
+    )
+
+    # Create graph and assign intrinsic graph-level metadata
+    G.graph["node_type"] = granularity
+
+    # Add Sequences to graph metadata
+    for c in G.graph["chain_ids"]:
+        if granularity == "rna_atom":
+            sequence = protein_df.loc[protein_df["chain_id"] == c][
+                "residue_name"
+            ].str.cat()
+        elif granularity == "contact":
+            sequence = (
+                full_df.loc[full_df["chain_id"] == c]["residue_name"]
+                .apply(three_to_one_with_mods)
+                .str.cat()
+            )
+        else:
+            sequence = (
+                protein_df.loc[protein_df["chain_id"] == c]["residue_name"]
+                .apply(three_to_one_with_mods)
+                .str.cat()
+            )
+        G.graph[f"sequence_{c}"] = sequence
     return G
 
 def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, edge_feat_name: Union[List[str], str] = None, graph_features:bool =False) -> Data:
