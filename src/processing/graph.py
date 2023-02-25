@@ -226,7 +226,7 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m
         pmhc_df = df.loc[df['chain_id'].isin(chain_key_dict['mhc']+chain_key_dict['epitope'])]
     return tcr_df, pmhc_df
 
-def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 4.):
+def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 5.):
     raw_df = deprotonate_structure(raw_df)
     tcr_df, pmhc_df = split_af2_tcrpmhc_df(raw_df, chain_seq)
     contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=8.5)
@@ -245,13 +245,13 @@ def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq:
     g = add_nodes_to_graph(g)
     # g = compute_edges(g, funcs=[add_atomic_edges, add_bond_order])
     g = compute_edges(g, funcs=[
-        partial(add_intra_chain_distance_threshold, chains=['A', 'B'], threshold=5.),
-        partial(add_intra_chain_distance_threshold, chains=['C', 'D'], threshold=5.),
+        partial(add_intra_chain_distance_threshold, chains=['A', 'B'], threshold=intra_edge_dist_threshold),
+        partial(add_intra_chain_distance_threshold, chains=['C', 'D'], threshold=intra_edge_dist_threshold),
         partial(add_edge_from_pairs, pairs=pairs, kind='inter_chain')
         # partial(add_inter_chain_distance_threshold, chains_1=['A', 'B'], chains_2=['C', 'D'], threshold=8.),
     ])
     return g
-    
+
 def build_residue_dist_threshold_graph(raw_df: pd.DataFrame, pdb_code: str, egde_dist_threshold: int =6.):
     df = process_dataframe(raw_df,
                             chain_selection = "all",
