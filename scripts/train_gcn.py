@@ -12,7 +12,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 
-from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
+from src.dataset import UnboundTCRpMHCDataModule, PPIDataModule, TCRpMHCDataModule
 from src.models.tcr_gnn import LightningGCN
 
 tsv = 'data/preprocessed/run329_results.tsv'

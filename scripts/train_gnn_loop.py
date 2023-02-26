@@ -15,7 +15,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print("Using:", DEVICE)
 
 
-from src.dataset import TCRBindDataModule, PPIDataModule, TCRpMHCDataModule
+from src.dataset import UnboundTCRpMHCDataModule, PPIDataModule, TCRpMHCDataModule
 from src.models.ppi_gnn import LightningGCNN, GCNN, AttGNN
 from src.models.tcr_gnn import GCN
 

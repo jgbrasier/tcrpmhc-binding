@@ -127,7 +127,7 @@ def read_pdb_to_dataframe(
 
     return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
 
-def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq, rescale_residue_number: Optional[bool] = False):
+def split_af2_tcrpmhc_df(df: pd.DataFrame, chain_seq: List[str], rescale_residue_number: Optional[bool] = False):
     d = []
     out = []
     for res in df.groupby('residue_number'):
@@ -412,8 +412,17 @@ def convert_nx_to_pyg_data(G: nx.Graph, node_feat_name: str, edge_feat_name: Uni
         edge_features = np.zeros((len(G.edges(data=True)), len(edge_feat_name)))
         for i, (_, _, feat_dict) in enumerate(G.edges(data=True)):
             for key, value in feat_dict.items():
-                edge_features[i, pos_dict[key]] = value
-        data['edge_features'] = torch.from_numpy(edge_features)
+                if key=='kind':
+                    if isinstance(value, set):
+                        value = list(value)
+                        for elem in value:
+                            edge_features[i, pos_dict[elem]] = 1
+                    else:
+                        raise TypeError(f"Edge features of type {key} should be stored in sets, not {type(value)}")
+                    pass # TODO
+                else:
+                    edge_features[i, pos_dict[key]] = value
+        data['edge_attr'] = torch.from_numpy(edge_features)
 
     # Add graph-level features
     if graph_features:
