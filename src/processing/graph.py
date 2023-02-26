@@ -288,7 +288,8 @@ def build_residue_dist_threshold_graph(raw_df: pd.DataFrame, pdb_code: str, egde
 
 def compute_residue_embedding(
     G: nx.Graph,
-    embedding_function: Callable = None
+    embedding_function: Callable = None,
+    index_on: Optional[str] = None
     ) -> nx.Graph:
     """
     Computes residue embeddings from a protein sequence and adds the to the graph.
@@ -297,6 +298,8 @@ def compute_residue_embedding(
     :type G: nx.Graph
     :param embedding_function: function to compute residue embedding from protein sequence
     :type embedding_function: Callable
+    :param index_on: graph node attribute to index the embedding on, for example: ``"residue_number"``
+    :type index_on: str
     :return: ``nx.Graph`` with esm embedding feature added to nodes.
     :rtype: nx.Graph
     """
@@ -308,9 +311,11 @@ def compute_residue_embedding(
         subgraph = subset_by_node_feature_value(G, "chain_id", chain)
 
         for i, (n, d) in enumerate(subgraph.nodes(data=True)):
-            pass
-            # G.nodes[n]["embedding"] = embedding[int(G.nodes[n]['residue_number'])]
-
+            if index_on:
+                G.nodes[n]["embedding"] = embedding[int(G.nodes[n][index_on])]
+            else:
+                G.nodes[n]["embedding"] = embedding[i]
+            
     return G
 
 def initialise_graph_with_metadata(
