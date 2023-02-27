@@ -256,7 +256,7 @@ def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq:
                             keep_hets = [],
                             granularity='CA') # alpha carbon
     g = initialise_graph_with_metadata(protein_df=df, # from above cell
-                                    raw_pdb_df=raw_df, # Store this for traceability
+                                    full_df=raw_df, # Store this for traceability
                                     pdb_code = pdb_code, #and again
                                     granularity = 'CA' # Store this so we know what kind of graph we have
                                     )
@@ -278,7 +278,7 @@ def build_residue_dist_threshold_graph(raw_df: pd.DataFrame, pdb_code: str, egde
                             keep_hets = [],
                             granularity='CA') # alpha carbon
     g = initialise_graph_with_metadata(protein_df=df, # from above cell
-                                   raw_pdb_df=raw_df, # Store this for traceability
+                                   full_df=raw_df, # Store this for traceability
                                    pdb_code = pdb_code, #and again
                                    granularity = "CA" # Store this so we know what kind of graph we have
                                   )

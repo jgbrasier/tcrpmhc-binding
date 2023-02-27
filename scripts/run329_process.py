@@ -44,7 +44,7 @@ tsv_path = 'data/preprocessed/run329_results.tsv'
 
 df = pd.read_csv(tsv_path, sep='\t')
 
-encoder = partial(compute_esm_embedding, representation='residue', model_name = "esm1b_t33_650M_UR50S", output_layer = 33)
+# encoder = partial(compute_esm_embedding, representation='residue', model_name = "esm1b_t33_650M_UR50S", output_layer = 33)
 
 
 ### ----------------------------------------------------------------------------------
@@ -125,9 +125,11 @@ encoder = partial(compute_esm_embedding, representation='residue', model_name = 
 ### ---------------------------------------------------------------------------------
 ### CONTACT GRAPH
 
-tsv_path = '../data/preprocessed/run329_results.tsv'
-pdb_dir = '../data/pdb/run329_results_for_jg'
-out_dir = '../data/graphs/run329_results_contact'
+print(os.listdir())
+
+tsv_path = 'data/preprocessed/run329_results.tsv'
+pdb_dir = 'data/pdb/run329_results_for_jg'
+out_dir = 'data/graphs/run329_results_contact'
 
 data = pd.read_csv(tsv_path, sep='\t')
 
@@ -136,9 +138,11 @@ encoder = partial(compute_esm_embedding, representation='residue', model_name = 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 for i in tqdm(df.index):
+    if os.path.exists(os.path.join(out_dir, f"{pdb_id}.pt")):
+        continue
     pdb_id = str(df.iloc[i]['uuid'])
     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
-    chain_seq = (data.iloc[pdb_id]['chainseq']).split('/')
+    chain_seq = (data.iloc[i]['chainseq']).split('/')
 
     raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path, parse_header=False)
     g = build_residue_contact_graph(raw_df, pdb_id, chain_seq, \
@@ -146,3 +150,4 @@ for i in tqdm(df.index):
                                     contact_dist_threshold=8.)
     g = compute_residue_embedding(g, encoder)
     pt = convert_nx_to_pyg_data(g, node_feat_name='embedding')
+    torch.save(pt, os.path.join(out_dir, f"{pdb_id}.pt"))
