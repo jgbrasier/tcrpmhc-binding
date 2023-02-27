@@ -112,21 +112,19 @@ class GINE(nn.Module):
                        nn.Linear(embedding_dim, embedding_dim), nn.ReLU()),
             edge_dim=num_edge_features
             )
+
+        # combined layers (in order)
+        self.batch_norm = BatchNorm(embedding_dim*3)
         self.fc1 = nn.Linear(embedding_dim*3, embedding_dim*3)
-
-        self.batch_norm = BatchNorm()
-
         self.relu = nn.LeakyReLU()
         self.dropout = nn.Dropout(dropout)
-
-        # combined layers
         self.fc2 = nn.Linear(embedding_dim*3, n_output)
 
     def forward(self, x, edge_index, edge_attr, batch):
         # Node embeddings 
-        x1 = self.conv1(x, edge_index, edge_attr)
-        x2 = self.conv2(x1, edge_index, edge_attr)
-        x3 = self.conv3(x2, edge_index, edge_attr)
+        x1 = self.conv1(x, edge_index, edge_attr.type(torch.float))
+        x2 = self.conv2(x1, edge_index, edge_attr.type(torch.float))
+        x3 = self.conv3(x2, edge_index, edge_attr.type(torch.float))
 
         # Graph-level readout
         x1 = global_add_pool(x1, batch)

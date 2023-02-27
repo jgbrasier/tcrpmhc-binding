@@ -62,7 +62,7 @@ class NetTCRDataset(Dataset):
 
 class NetTCRDataModule(pl.LightningDataModule):
     def __init__(self, path_to_file: str, path_to_test_file: Optional[str]=None, 
-                batch_size: int = 32, n_splits: int = 5, k: int = 1,
+                batch_size: int = 32,
                 peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30,
                 target='epitope', low: int = 50, high: int = 800, random_seed: int =42,
                 device: torch.device = torch.device('cpu'), num_workers: int =0) -> None:
@@ -74,10 +74,6 @@ class NetTCRDataModule(pl.LightningDataModule):
         :type test: Optional[str], optional
         :param batch_size: batch size, defaults to 32
         :type batch_size: int, optional
-        :param n_splits: train/val stratified k fold number of splits, defaults to 5
-        :type n_splits: int, optional
-        :param k: k-th fold number, defaults to 1
-        :type k: int, optional
         :param peptide_len: _description_, defaults to 9
         :type peptide_len: int, optional
         :param cdra_len: encoding dimension of cdr3b sequence, defaults to 30
@@ -128,7 +124,7 @@ class NetTCRDataModule(pl.LightningDataModule):
         :param encoding: encoding dictionary, defaults to blosum50_full
         :type encoding: dict, optional
         """
-        assert split in ['hard', 'stratified', 'random']
+        assert split in ['hard', 'random']
         # load in training dataframe
         train_df = pd.read_csv(self.train_path, sep=sep)
 
@@ -145,14 +141,18 @@ class NetTCRDataModule(pl.LightningDataModule):
             # if no test file, we use the HardSplit heuristic
                 train_df, val_df, self.selected_targets = hard_split_df(train_df, target_col=self.hparams.target, min_ratio=train_size,
                                                                     low=self.hparams.low, high=self.hparams.high, random_seed=self.hparams.random_seed)
-            elif split == 'stratified':
-                skf = StratifiedKFold(n_splits=self.hparams.n_splits, shuffle=True, random_state=self.hparams.random_seed)
-                all_splits = [k for k in skf.split(train_df, train_df['epitope'])]
-                train_indexes, val_indexes = all_splits[self.hparams.k]
-                train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
+                self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
 
-                train_df, val_df = train_df.iloc[train_indexes], train_df.iloc[val_indexes]
-
+                self.val = NetTCRDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+            elif split == 'random':
+                dataset = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
+                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                self.train, self.val = torch.utils.data.random_split(dataset, \
+                        [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
+                        generator=torch.Generator().manual_seed(self.hparams.random_seed))
+            
             # encoding will be done at dataset initalization
             self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
                                 peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)

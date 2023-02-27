@@ -51,8 +51,8 @@ class TCRpMHCDataModule(pl.LightningDataModule):
         elif split == 'random':
             dataset = GraphDataset(self.df, self.hparams.processed_dir, self.hparams.id_col, self.hparams.y_col)
             self.train, self.test = torch.utils.data.random_split(dataset, \
-            [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
-            generator=torch.Generator().manual_seed(random_seed))
+                    [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
+                    generator=torch.Generator().manual_seed(random_seed))
 
     # custom collate see: https://github.com/pyg-team/pytorch_geometric/issues/781
     def collate(self, data_list):
