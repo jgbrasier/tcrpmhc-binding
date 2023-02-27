@@ -65,7 +65,7 @@ def mkdir(outdir):
         os.makedirs(outdir)
 
 
-def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len):
+def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len, keep_edges=False):
     '''
     blosum encoding of a list of amino acid sequences with padding 
     to a max length
@@ -81,6 +81,7 @@ def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len):
     # encode sequences:
     sequences=[]
     for seq in aa_seqs:
+        seq = seq[1:-1] if keep_edges else seq
         e_seq=np.zeros((len(seq),len(blosum["A"])))
         count=0
         for aa in seq:
