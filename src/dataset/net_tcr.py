@@ -23,7 +23,7 @@ class NetTCRDataset(Dataset):
     """
     def __init__(self, data: pd.DataFrame, test: Optional[bool]=False, 
                 encoder= enc_list_bl_max_len, encoding: dict = blosum50_20aa, 
-                peptide_len: int = 9, cdra_len: int = 30,cdrb_len: int = 30, 
+                target='epitope', peptide_len: int = 9, cdra_len: int = 30,cdrb_len: int = 30, 
                 device: torch.device = torch.device('cpu')) -> None:
 
         super().__init__()
@@ -32,7 +32,7 @@ class NetTCRDataset(Dataset):
         self._len = len(data.index)
         self._test = test
 
-        self.peptide = encoder(data['epitope'], encoding, peptide_len)
+        self.peptide = encoder(data[target], encoding, peptide_len)
         self.cdr3a = encoder(data['cdr3a'], encoding, cdra_len)
         self.cdr3b = encoder(data['cdr3b'], encoding, cdrb_len)
         self.y = np.array(data['binder']) if not test else None
@@ -62,10 +62,7 @@ class NetTCRDataset(Dataset):
 
 class NetTCRDataModule(pl.LightningDataModule):
     def __init__(self, path_to_file: str, path_to_test_file: Optional[str]=None, 
-                batch_size: int = 32,
-                peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30,
-                target='epitope', low: int = 50, high: int = 800, random_seed: int =42,
-                device: torch.device = torch.device('cpu'), num_workers: int =0) -> None:
+                batch_size: int = 32, device: torch.device = torch.device('cpu'), num_workers: int =0) -> None:
         """_summary_
 
         :param path_to_file: relative path to .csv or .tsv file
@@ -74,20 +71,6 @@ class NetTCRDataModule(pl.LightningDataModule):
         :type test: Optional[str], optional
         :param batch_size: batch size, defaults to 32
         :type batch_size: int, optional
-        :param peptide_len: _description_, defaults to 9
-        :type peptide_len: int, optional
-        :param cdra_len: encoding dimension of cdr3b sequence, defaults to 30
-        :type cdra_len: int, optional
-        :param cdrb_len: encoding dimension of cdr3b sequence, defaults to 30
-        :type cdrb_len: int, optional
-        :param target: target column name in dataset, defaults to 'epitope'
-        :type target: str, optional
-        :param low: hard split target occurence low bound, defaults to 50
-        :type low: int, optional
-        :param high: hard split target occurence high bound, defaults to 800
-        :type high: int, optional
-        :param random_seed: random seed for train/test hardsplit and train/val stratified k fold, defaults to 42
-        :type random_seed: int, optional
         :param device: device to write data tensors to, defaults to torch.device('cpu')
         :type device: torch.device, optional
         :param num_workers: number of workers for torch.DataLoader, defaults to 0
@@ -111,7 +94,10 @@ class NetTCRDataModule(pl.LightningDataModule):
 
         self.selected_targets = None
 
-    def setup(self, sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding: dict = blosum50_full, split='hard') -> None:
+    def setup(self, sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding: dict = blosum50_full, \
+              peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30, \
+              split='hard', target='epitope', low: int = 50, high: int = 800, random_seed: int =42,
+            ) -> None:
         """_summary_
 
         :param train_size: train/test split, must be between 0 and 1
@@ -123,6 +109,20 @@ class NetTCRDataModule(pl.LightningDataModule):
         :type encoder: Callable, optional
         :param encoding: encoding dictionary, defaults to blosum50_full
         :type encoding: dict, optional
+        :param peptide_len: _description_, defaults to 9
+        :type peptide_len: int, optional
+        :param cdra_len: encoding dimension of cdr3b sequence, defaults to 30
+        :type cdra_len: int, optional
+        :param cdrb_len: encoding dimension of cdr3b sequence, defaults to 30
+        :type cdrb_len: int, optional
+        :param target: target column name in dataset, defaults to 'epitope'
+        :type target: str, optional
+        :param low: hard split target occurence low bound, defaults to 50
+        :type low: int, optional
+        :param high: hard split target occurence high bound, defaults to 800
+        :type high: int, optional
+        :param random_seed: random seed for train/test hardsplit and train/val stratified k fold, defaults to 42
+        :type random_seed: int, optional
         """
         assert split in ['hard', 'random']
         # load in training dataframe
@@ -133,32 +133,25 @@ class NetTCRDataModule(pl.LightningDataModule):
             test_df = pd.read_csv(self.test_path, sep=sep)
             # encoding will be done at dataset initalization
             self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                            target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
             self.test = NetTCRDataset(test_df, test=True, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                            target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
         else:
             if split == 'hard':
             # if no test file, we use the HardSplit heuristic
-                train_df, val_df, self.selected_targets = hard_split_df(train_df, target_col=self.hparams.target, min_ratio=train_size,
-                                                                    low=self.hparams.low, high=self.hparams.high, random_seed=self.hparams.random_seed)
+                train_df, val_df, self.selected_targets = hard_split_df(train_df, target_col=target, min_ratio=train_size,
+                                                                    low=low, high=high, random_seed=random_seed)
                 self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                                target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
 
                 self.val = NetTCRDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                                target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
             elif split == 'random':
                 dataset = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                            peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
+                            target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
                 self.train, self.val = torch.utils.data.random_split(dataset, \
                         [int(train_size*len(dataset)), len(dataset)-int(train_size*len(dataset))], 
-                        generator=torch.Generator().manual_seed(self.hparams.random_seed))
-            
-            # encoding will be done at dataset initalization
-            self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)
-
-            self.val = NetTCRDataset(val_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
-                                peptide_len = self.hparams.peptide_len, cdra_len = self.hparams.cdra_len, cdrb_len = self.hparams.cdrb_len)                  
+                        generator=torch.Generator().manual_seed(random_seed))
 
 
     def train_dataloader(self):
