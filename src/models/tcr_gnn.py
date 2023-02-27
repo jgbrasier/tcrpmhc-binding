@@ -88,16 +88,31 @@ class LightningGNN(pl.LightningModule):
         self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
+
 class GINE(nn.Module):
-    def __init__(self, n_output=1, embedding_dim= 1280, output_dim=128, dropout=0.2):
+    def __init__(self, n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.5):
         super(GCN, self).__init__()
         print('GINENet Loaded')
 
         # for protein 1
         self.n_output = n_output
-        self.conv1 = GINEConv(embedding_dim, embedding_dim//2)
-        self.conv2 = GINEConv(embedding_dim//2, embedding_dim)
-        self.fc1 = nn.Linear(embedding_dim, output_dim)
+        self.conv1 = GINEConv(
+            nn.Sequential(nn.Linear(num_node_features, embedding_dim),
+                       nn.BatchNorm1d(embedding_dim), nn.ReLU(),
+                       nn.Linear(embedding_dim, embedding_dim), nn.ReLU()),
+            edge_dim=num_edge_features
+            )
+        self.conv2 = GINEConv(
+            nn.Sequential(nn.Linear(embedding_dim, embedding_dim), nn.BatchNorm1d(embedding_dim), nn.ReLU(),
+                       nn.Linear(embedding_dim, embedding_dim), nn.ReLU()),
+            edge_dim=num_edge_features
+            )
+        self.conv3 = GINEConv(
+            nn.Sequential(nn.Linear(embedding_dim, embedding_dim), nn.BatchNorm1d(embedding_dim), nn.ReLU(),
+                       nn.Linear(embedding_dim, embedding_dim), nn.ReLU()),
+            edge_dim=num_edge_features
+            )
+        self.fc1 = nn.Linear(embedding_dim*3, embedding_dim*3)
 
         self.batch_norm = BatchNorm()
 
@@ -105,28 +120,31 @@ class GINE(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # combined layers
-        self.fc2 = nn.Linear(output_dim ,output_dim//2)
-        self.out = nn.Linear(output_dim//2, self.n_output)
+        self.fc2 = nn.Linear(embedding_dim*3, n_output)
 
     def forward(self, x, edge_index, edge_attr, batch):
-        x = self.conv1(x, edge_index, edge_attr)
-        x = self.relu(x)
-        x = self.conv2(x, edge_index, edge_attr)
-        x = self.relu(x)
+        # Node embeddings 
+        x1 = self.conv1(x, edge_index, edge_attr)
+        x2 = self.conv2(x1, edge_index, edge_attr)
+        x3 = self.conv3(x2, edge_index, edge_attr)
 
-	    # global pooling
-        x = global_add_pool(x, batch)   
+        # Graph-level readout
+        x1 = global_add_pool(x1, batch)
+        x2 = global_add_pool(x2, batch)
+        x3 = global_add_pool(x3, batch)
 
-        # flatten
-        xf = self.relu(self.fc1(x))
-        # x = self.dropout(x)
+        # Concatenate graph embeddings
+        x_cat = torch.cat((x1, x2, x3), dim=1)
 
-        # add some dense layers
-        xf = self.fc2(xf)
-        xf = self.relu(xf)
-        # xf = self.dropout(xf)
-        out = self.out(xf)
-        return out
+        # Normalize
+        x_cat = self.batch_norm(x_cat)
+
+        # Classifier
+        x_out = self.fc1(x_cat)
+        x_out = self.relu(x_out)
+        x_out = self.dropout(x_out)
+        x_out = self.fc2(x_out)
+        return x_out
     
 
 class GCN(nn.Module):

@@ -138,16 +138,18 @@ encoder = partial(compute_esm_embedding, representation='residue', model_name = 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 for i in tqdm(df.index):
-    if os.path.exists(os.path.join(out_dir, f"{pdb_id}.pt")):
-        continue
     pdb_id = str(df.iloc[i]['uuid'])
     pdb_path = os.path.join(pdb_dir, 'model_'+str(pdb_id)+'.pdb')
     chain_seq = (data.iloc[i]['chainseq']).split('/')
+
+    if os.path.exists(os.path.join(out_dir, f"{pdb_id}.pt")):
+        continue
 
     raw_df, header = read_pdb_to_dataframe(pdb_path=pdb_path, parse_header=False)
     g = build_residue_contact_graph(raw_df, pdb_id, chain_seq, \
                                     intra_edge_dist_threshold=5.,
                                     contact_dist_threshold=8.)
     g = compute_residue_embedding(g, encoder)
-    pt = convert_nx_to_pyg_data(g, node_feat_name='embedding')
+    pt = convert_nx_to_pyg_data(g, node_feat_name='embedding', \
+            edge_feat_name=['intra_distance_threshold', 'inter_chain', 'distance'])
     torch.save(pt, os.path.join(out_dir, f"{pdb_id}.pt"))
