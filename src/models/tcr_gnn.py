@@ -23,7 +23,7 @@ class LightningGNN(pl.LightningModule):
         self.save_hyperparameters()
 
         # self.model = GCN(n_output=1, embedding_dim=embedding_dim, output_dim=output_dim, dropout=dropout)
-        self.model = None
+        self.model = GINE(n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.5)
         self.sigmoid = nn.Sigmoid()
 
         # metrics
@@ -36,9 +36,9 @@ class LightningGNN(pl.LightningModule):
 
     def forward(self, data):
         #get graph input for protein 1 
-        x, edge_index, batch = data.x, data.edge_index, data.batch
+        x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
         # get graph input for protein 2
-        x = self.model(x, edge_index, batch)
+        x = self.model(x, edge_index, edge_attr, batch)
         out = self.sigmoid(x)
         return out
 
