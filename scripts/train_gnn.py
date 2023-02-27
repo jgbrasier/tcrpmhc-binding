@@ -16,10 +16,10 @@ from src.dataset import UnboundTCRpMHCDataModule, PPIDataModule, TCRpMHCDataModu
 from src.models.tcr_gnn import LightningGNN
 
 tsv = 'data/preprocessed/run329_results.tsv'
-dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/graphs/run329_results_bound'
+dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/graphs/run329_results_contact'
 # ckpt = 'checkpoint/run329-data/ppi_gnn/epoch=0-step=628-v1.ckpt'
-run_name = 'run329-bound-data'
-model_name = 'tcr_gcn'
+run_name = 'run329-contact-data'
+model_name = 'tcr_gine'
 
 BATCH_SIZE = 16
 SEED = 24
@@ -33,7 +33,7 @@ data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,
 # processed_dir =  'data/graphs/pan_human_new'
 # data = PPIDataModule(npy_file=npy_file, processed_dir=processed_dir, batch_size=BATCH_SIZE)
 
-data.setup(split='random', train_size=0.85, target='peptide', low=50, high=600, random_seed=SEED)
+data.setup(split='hard', train_size=0.85, target='peptide', low=50, high=600, random_seed=SEED)
 
 
 train_loader = data.train_dataloader()
@@ -42,7 +42,7 @@ test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
 
-tcr_gcn = LightningGNN(embedding_dim=1280) # ESM embedding dim: 1280
+tcr_gcn = LightningGNN() # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint',run_name, model_name), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs',run_name), name=model_name)
 trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], \

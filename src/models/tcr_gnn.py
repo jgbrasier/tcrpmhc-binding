@@ -91,7 +91,7 @@ class LightningGNN(pl.LightningModule):
 
 class GINE(nn.Module):
     def __init__(self, n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.5):
-        super(GCN, self).__init__()
+        super(GINE, self).__init__()
         print('GINENet Loaded')
 
         # for protein 1
