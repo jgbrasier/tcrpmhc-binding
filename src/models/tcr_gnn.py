@@ -108,10 +108,10 @@ class GINE(nn.Module):
         self.fc2 = nn.Linear(output_dim ,output_dim//2)
         self.out = nn.Linear(output_dim//2, self.n_output)
 
-    def forward(self, x, edge_index, batch):
-        x = self.conv1(x, edge_index)
+    def forward(self, x, edge_index, edge_attr, batch):
+        x = self.conv1(x, edge_index, edge_attr)
         x = self.relu(x)
-        x = self.conv2(x, edge_index)
+        x = self.conv2(x, edge_index, edge_attr)
         x = self.relu(x)
 
 	    # global pooling
