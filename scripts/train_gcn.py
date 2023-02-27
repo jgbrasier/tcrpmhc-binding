@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 from src.dataset import UnboundTCRpMHCDataModule, PPIDataModule, TCRpMHCDataModule
-from src.models.tcr_gnn import LightningGCN
+from src.models.tcr_gnn import LightningGNN
 
 tsv = 'data/preprocessed/run329_results.tsv'
 dir = '/n/data1/hms/dbmi/zitnik/lab/users/jb611/graphs/run329_results_bound'
@@ -42,7 +42,7 @@ test_loader = data.test_dataloader()
 print("Test len:",len(data.test))
 
 
-tcr_gcn = LightningGCN(embedding_dim=1280) # ESM embedding dim: 1280
+tcr_gcn = LightningGNN(embedding_dim=1280) # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint',run_name, model_name), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs',run_name), name=model_name)
 trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], \
