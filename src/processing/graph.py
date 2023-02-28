@@ -251,8 +251,8 @@ def seperate_tcr_pmhc(df: pd.DataFrame, chain_key_dict: dict = None, include_b2m
 
 def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq: List[str], intra_edge_dist_threshold: int = 5., contact_dist_threshold: int = 8.):
     raw_df = deprotonate_structure(raw_df)
-    tcr_df, pmhc_df = split_af2_tcrpmhc_df(raw_df, chain_seq)
-    contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=contact_dist_threshold)
+    tcr_df, pmhc_df = split_af2_tcrpmhc_df(raw_df, chain_seq, rescale_residue_number=True)
+    contact_df, pairs = get_contact_atoms(tcr_df, pmhc_df, threshold=8.)
     df = get_all_residue_atoms(contact_df, pd.concat((tcr_df, pmhc_df)))
     df = process_dataframe(df,
                             chain_selection = "all",
@@ -260,16 +260,22 @@ def build_residue_contact_graph(raw_df: pd.DataFrame, pdb_code: str,  chain_seq:
                             deprotonate = True,
                             keep_hets = [],
                             granularity='CA') # alpha carbon
+    full_df = process_dataframe(pd.concat((tcr_df, pmhc_df)),
+                            chain_selection = "all",
+                            insertions = False,
+                            deprotonate = True,
+                            keep_hets = [],
+                            granularity='CA')
     g = initialise_graph_with_metadata(protein_df=df, # from above cell
-                                    full_df=raw_df, # Store this for traceability
+                                    full_df=full_df, # Store this for traceability
                                     pdb_code = pdb_code, #and again
-                                    granularity = 'CA' # Store this so we know what kind of graph we have
+                                    granularity = 'contact' # Store this so we know what kind of graph we have
                                     )
-    g = add_nodes_to_graph(g)
+    g = add_nodes_to_graph(g, protein_df=df)
     # g = compute_edges(g, funcs=[add_atomic_edges, add_bond_order])
     g = compute_edges(g, funcs=[
-        partial(add_intra_chain_distance_threshold, chains=['A', 'B'], threshold=intra_edge_dist_threshold),
-        partial(add_intra_chain_distance_threshold, chains=['C', 'D'], threshold=intra_edge_dist_threshold),
+        partial(add_intra_chain_distance_threshold, chains=['A', 'B'], threshold=5.),
+        partial(add_intra_chain_distance_threshold, chains=['C', 'D'], threshold=5.),
         partial(add_edge_from_pairs, pairs=pairs, kind='inter_chain')
         # partial(add_inter_chain_distance_threshold, chains_1=['A', 'B'], chains_2=['C', 'D'], threshold=8.),
     ])
