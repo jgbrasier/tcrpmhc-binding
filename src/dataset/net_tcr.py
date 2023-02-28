@@ -7,7 +7,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from typing import Optional
 
-from src.utils import enc_list_bl_max_len, blosum50_20aa, blosum50_full, hard_split_df
+from src.utils import enc_list_bl_max_len, blosum50_20aa, blosum50_full, hard_split_df, drop_top_k
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -127,6 +127,7 @@ class NetTCRDataModule(pl.LightningDataModule):
         assert split in ['hard', 'random']
         # load in training dataframe
         train_df = pd.read_csv(self.train_path, sep=sep)
+        # train_df = drop_top_k(train_df, target, k=10, frac=0.8)
 
         if self._test_provided:
             # if test file is provided, load it in directly

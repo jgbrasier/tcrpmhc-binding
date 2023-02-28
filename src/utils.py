@@ -60,12 +60,8 @@ AA_3to1 = {'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU':'E', 'PHE': 'F', 'GLY': 'G'
 AA_1to3 = {v: k for k, v in AA_3to1.items()}
 
 
-def mkdir(outdir):
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
 
-
-def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len, keep_edges=False):
+def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len, keep_ends=False):
     '''
     blosum encoding of a list of amino acid sequences with padding 
     to a max length
@@ -81,7 +77,7 @@ def enc_list_bl_max_len(aa_seqs, blosum, max_seq_len, keep_edges=False):
     # encode sequences:
     sequences=[]
     for seq in aa_seqs:
-        seq = seq[1:-1] if keep_edges else seq
+        seq = seq[1:-1] if keep_ends else seq
         e_seq=np.zeros((len(seq),len(blosum["A"])))
         count=0
         for aa in seq:
@@ -157,6 +153,27 @@ blosum50_20aa = {
     }
 
 from typing import Tuple, List
+
+def drop_top_k(df: pd.DataFrame, target: str, k:int, frac: float = 1.0) -> pd.DataFrame:
+    """
+    Drops a fraction of rows from a pandas DataFrame based on the 
+    top k most frequent values in a target column.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to be modified.
+        target (str): The name of the target column to be used for dropping rows.
+        k (int): The number of top most frequent values to be used for determining which rows to drop.
+        frac (float): The fraction of rows to be dropped. 
+                    Defaults to 1.0 (i.e. all rows are dropped).
+
+    Returns:
+        pd.DataFrame: A new DataFrame with the specified fraction of rows dropped 
+                    based on the top k most frequent values in the target column.
+    """
+    top_k = list(df[target].value_counts()[:k].index)
+    idx_to_drop = df[df[target].isin(top_k)].sample(frac=frac).index
+    new_df = df.drop(index=idx_to_drop, axis=0)
+    return new_df
 
 def hard_split_df(
         df: pd.DataFrame, target_col: str, min_ratio: float, random_seed: float, low: int, high: int) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:

@@ -176,8 +176,13 @@ def get_contact_atoms(df1: pd.DataFrame, df2:pd.DataFrame, threshold:float, depr
 
 def get_all_residue_atoms(partial_df: pd.DataFrame, full_df: pd.DataFrame):
     assert all(partial_df.columns == full_df.columns), "DataFrame column names must match"
-    return full_df[full_df['residue_number'].isin(partial_df['residue_number'])]
-
+    res = pd.DataFrame(columns=full_df.columns)
+    for chain in full_df['chain_id'].unique():
+        chain_full_df = full_df[full_df['chain_id']==chain].copy()
+        chain_partial_df = partial_df[partial_df['chain_id']==chain].copy()
+        add = chain_full_df[chain_full_df['residue_number'].isin(chain_partial_df['residue_number'])]
+        res = pd.concat((res, add))
+    return res
 
 
 def add_intra_chain_distance_threshold(G: nx.Graph, chains: Union[List[str], str], threshold: float):

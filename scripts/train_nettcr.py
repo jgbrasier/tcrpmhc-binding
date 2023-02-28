@@ -12,19 +12,19 @@ from src.dataset import NetTCRDataModule
 from src.models import LightningNetTCR
 from src.utils import blosum50_full, blosum50_20aa, enc_list_bl_max_len
 
-PEP_LEN = 15
+PEP_LEN = 20
 CDR3A_LEN = 30
 CDR3B_LEN = 30
 
 BATCH_SIZE = 32
 RANDOM_SEED = 42
 
-tcrseq = NetTCRDataModule(path_to_file="data/preprocessed/train_ab_95_alphabeta.csv",
+tcrseq = NetTCRDataModule(path_to_file="data/preprocessed/tc_hard.tsv",
                           batch_size=BATCH_SIZE)
 
-tcrseq.setup(sep=',', train_size=0.85, encoder= enc_list_bl_max_len, encoding = blosum50_full, \
+tcrseq.setup(sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding = blosum50_full, \
             peptide_len = PEP_LEN, cdra_len = CDR3A_LEN, cdrb_len = CDR3B_LEN, \
-            split='hard', target='epitope', low = 50, high = 2000, random_seed=RANDOM_SEED)
+            split='hard', target="peptide", low = 50, high = 3000, random_seed=RANDOM_SEED)
 
 train_loader = tcrseq.train_dataloader()
 val_loader = tcrseq.val_dataloader()
