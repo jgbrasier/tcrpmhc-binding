@@ -19,7 +19,7 @@ CDR3B_LEN = 30
 BATCH_SIZE = 32
 RANDOM_SEED = 42
 
-tcrseq = NetTCRDataModule(path_to_file="data/preprocessed/tc_hard.tsv",
+tcrseq = NetTCRDataModule(path_to_file="data/preprocessed/tcrpmhc_binding_clean.tsv",
                           batch_size=BATCH_SIZE)
 
 tcrseq.setup(sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding = blosum50_full, \
