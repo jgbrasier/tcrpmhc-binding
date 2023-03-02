@@ -13,6 +13,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
+from typing import List
+
 class NetTCRDataset(Dataset):
     """
     DataLoader for:
@@ -96,7 +98,7 @@ class NetTCRDataModule(pl.LightningDataModule):
 
     def setup(self, sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding: dict = blosum50_full, \
               peptide_len: int = 9, cdra_len: int = 30, cdrb_len: int = 30, \
-              split='hard', target='epitope', low: int = 50, high: int = 800, random_seed: int =42,
+              split='hard', target='epitope', target_values: List[str] = None, low: int = 50, high: int = 800, random_seed: int =42,
             ) -> None:
         """_summary_
 
@@ -141,7 +143,7 @@ class NetTCRDataModule(pl.LightningDataModule):
             if split == 'hard':
             # if no test file, we use the HardSplit heuristic
                 train_df, val_df, self.selected_targets = hard_split_df(train_df, target_col=target, min_ratio=train_size,
-                                                                    low=low, high=high, random_seed=random_seed)
+                                                                    low=low, high=high, target_values=target_values, random_seed=random_seed)
                 self.train = NetTCRDataset(train_df, encoder=encoder, encoding=encoding, device = self.hparams.device,
                                 target=target, peptide_len = peptide_len, cdra_len = cdra_len, cdrb_len = cdrb_len)
 
