@@ -158,7 +158,7 @@ class NetTCRDataModule(pl.LightningDataModule):
 
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)  # type: ignore
+        return DataLoader(self.train, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers, shuffle=True)  # type: ignore
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)  # type: ignore
