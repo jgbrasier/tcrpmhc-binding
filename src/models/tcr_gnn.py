@@ -16,9 +16,10 @@ from torchmetrics.classification.accuracy import BinaryAccuracy
 from torchmetrics.classification.auroc import BinaryAUROC
 from torchmetrics.classification.precision_recall import BinaryPrecision, BinaryRecall
 from torchmetrics.classification.f_beta import BinaryF1Score
+from torchmetrics.regression.r2 import R2Score
 
 class LightningGNN(pl.LightningModule):
-    def __init__(self, learning_rate = 0.001,):
+    def __init__(self, learning_rate = 0.001, _regression=True):
         super().__init__()
         self.save_hyperparameters()
 
@@ -26,20 +27,24 @@ class LightningGNN(pl.LightningModule):
         self.model = GINE(n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.5)
         self.sigmoid = nn.Sigmoid()
 
-        # metrics
-        self.loss_fn = nn.BCELoss()
-        self._acc = BinaryAccuracy()
-        self._precision = BinaryPrecision()
-        self._recall = BinaryRecall()
-        self._f1 = BinaryF1Score()
-        self._auroc = BinaryAUROC()
+        self._regression = _regression
+        if self._regression:
+            self.loss_fn = nn.MSELoss()
+            self._r2 = R2Score()
+        else:
+            self.loss_fn = nn.BCELoss()
+            self._acc = BinaryAccuracy()
+            self._precision = BinaryPrecision()
+            self._recall = BinaryRecall()
+            self._f1 = BinaryF1Score()
+            self._auroc = BinaryAUROC()
 
     def forward(self, data):
         #get graph input for protein 1 
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
         # get graph input for protein 2
-        x = self.model(x, edge_index, edge_attr, batch)
-        out = self.sigmoid(x)
+        out = self.model(x, edge_index, edge_attr, batch)
+        # out = self.sigmoid(out)
         return out
 
     def configure_optimizers(self):
@@ -58,16 +63,20 @@ class LightningGNN(pl.LightningModule):
         output = self(prot)
         label = label.type(torch.float)
         loss = self.loss_fn(output, label) # output is float32 needs to match
-        acc = self._acc(output, label)
-        precision = self._precision(output, label)
-        recall = self._recall(output, label)
-        f1 = self._f1(output, label)
-        auroc = self._auroc(output, label)
-        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        if self._regression:
+            r2 = self._r2
+            self.log("val_r2", r2, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        else:
+            acc = self._acc(output, label)
+            precision = self._precision(output, label)
+            recall = self._recall(output, label)
+            f1 = self._f1(output, label)
+            auroc = self._auroc(output, label)
+            self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
     
@@ -75,17 +84,21 @@ class LightningGNN(pl.LightningModule):
         prot, label = batch
         output = self(prot)
         loss = self.loss_fn(output, label)
-        acc = self._acc(output, label)
-        precision = self._precision(output, label)
-        recall = self._recall(output, label)
-        f1 = self._f1(output, label)
-        auroc = self._auroc(output, label)
-        self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
-        self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        if self._regression:
+            r2 = self._r2
+            self.log("test_r2", r2, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        else:
+            acc = self._acc(output, label)
+            precision = self._precision(output, label)
+            recall = self._recall(output, label)
+            f1 = self._f1(output, label)
+            auroc = self._auroc(output, label)
+            self.log("test_acc", acc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("test_precision", precision, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("test_recall", recall, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("test_f1", f1, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+            self.log("test_auroc", auroc, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
+        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         return loss
 
 

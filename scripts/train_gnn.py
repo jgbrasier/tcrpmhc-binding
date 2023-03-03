@@ -29,7 +29,7 @@ EPOCHS = 100
 
 
 data = TCRpMHCDataModule(tsv_path=tsv, processed_dir=dir, batch_size=BATCH_SIZE,\
-                        id_col='uuid', y_col='binder', num_workers=NUM_WORKERS)
+                        id_col='uuid', y_col='pmhc_tcr_pae_norm', num_workers=NUM_WORKERS)
 
 # npy_file =  'data/preprocessed/pan_human_data.npy'
 # processed_dir =  'data/graphs/pan_human_new'
