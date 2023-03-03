@@ -26,7 +26,7 @@ TARGET_VALUES = ['NYNYLYRLF', 'NQKLIANQF', 'PTDNYITTY', 'MEVTPSGTWL', 'LTDEMIAQY
 
 tcrseq.setup(sep='\t', train_size=0.85, encoder= enc_list_bl_max_len, encoding = blosum50_full, \
             peptide_len = PEP_LEN, cdra_len = CDR3A_LEN, cdrb_len = CDR3B_LEN, \
-            split='random', target="peptide", low = 40, high = 700, random_seed=RANDOM_SEED,\
+            split='hard', target="peptide", low = 40, high = 3000, random_seed=RANDOM_SEED,\
             )
 
 train_loader = tcrseq.train_dataloader()
