@@ -47,7 +47,7 @@ print("Test len:",len(data.test))
 #     print(batch)
 #     break
 
-tcr_gcn = LightningGNN() # ESM embedding dim: 1280
+tcr_gcn = LightningGNN(learning_rate=0.01, _regression=True) # ESM embedding dim: 1280
 checkpoint_callback = ModelCheckpoint(dirpath=os.path.join('checkpoint',run_name, model_name), save_top_k=1, monitor='val_auroc', mode='max')
 tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join('logs',run_name), name=model_name)
 if torch.cuda.is_available():
