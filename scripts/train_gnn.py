@@ -55,5 +55,5 @@ if torch.cuda.is_available():
                         accelerator='gpu', devices=1, log_every_n_steps=30, check_val_every_n_epoch=1)
 else:
     trainer = pl.Trainer(max_epochs=EPOCHS, logger=tb_logger, callbacks=[checkpoint_callback], \
-                        log_every_n_steps=30, check_val_every_n_epoch=1)
+                        log_every_n_steps=30, check_val_every_n_epoch=1, detect_anomaly=True)
 trainer.fit(tcr_gcn, train_dataloaders=train_loader, val_dataloaders=test_loader)

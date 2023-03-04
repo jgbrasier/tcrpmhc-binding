@@ -24,7 +24,7 @@ class LightningGNN(pl.LightningModule):
         self.save_hyperparameters()
 
         # self.model = GCN(n_output=1, embedding_dim=embedding_dim, output_dim=output_dim, dropout=dropout)
-        self.model = GINE(n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.5)
+        self.model = GINE(n_output=1, num_node_features= 1280, num_edge_features=3, embedding_dim=128, dropout=0.2)
         self.sigmoid = nn.Sigmoid()
 
         self._regression = _regression
@@ -64,7 +64,7 @@ class LightningGNN(pl.LightningModule):
         label = label.type(torch.float)
         loss = self.loss_fn(output, label) # output is float32 needs to match
         if self._regression:
-            r2 = self._r2
+            r2 = self._r2(output, label)
             self.log("val_r2", r2, on_step=True, on_epoch=True, prog_bar=False, logger=True, batch_size=len(batch))
         else:
             acc = self._acc(output, label)
